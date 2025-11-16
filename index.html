@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recycling Scanner</title>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef } = React;
+
+        // Gemini API Configuration
+        const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; // 请替换为您的 API Key
+        
+        // Gemini API URL - 使用最新的 gemini-2.5-flash 模型
+        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+        // Icon components (simplified SVG icons)
+        const Camera = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        );
+
+        const Upload = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+        );
+
+        const Menu = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        );
+
+        const X = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        );
+
+        const Home = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
+        );
+
+        const Info = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        );
+
+        const MessageSquare = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+        );
+
+        const Trophy = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+            </svg>
+        );
+
+        const Trash2 = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        );
+
+        const RecyclingScanner = () => {
+            const [currentPage, setCurrentPage] = useState('welcome');
+            const [menuOpen, setMenuOpen] = useState(false);
+            const [leaderboard, setLeaderboard] = useState([
+                { name: 'Alice Green', score: 245, items: 89 },
+                { name: 'Bob Eco', score: 198, items: 72 },
+                { name: 'Carol Earth', score: 176, items: 65 },
+                { name: 'David Clean', score: 154, items: 58 },
+                { name: 'Emma Nature', score: 132, items: 51 }
+            ]);
+            const [scannedImage, setScannedImage] = useState(null);
+            const [scanResult, setScanResult] = useState(null);
+            const [feedback, setFeedback] = useState('');
+            const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+            const uploadInputRef = useRef(null);
+            const cameraInputRef = useRef(null);
+
+            const recyclingInfo = {
+                recyclable: [
+                    { name: 'Paper', items: ['Newspapers', 'Magazines', 'Cardboard boxes', 'Office paper', 'Paper bags'] },
+                    { name: 'Glass', items: ['Bottles', 'Jars', 'Glass containers'] },
+                    { name: 'Plastic', items: ['PET bottles (#1)', 'HDPE containers (#2)', 'Plastic bags (check local rules)'] },
+                    { name: 'Metal', items: ['Aluminum cans', 'Steel cans', 'Tin cans', 'Metal lids'] }
+                ],
+                nonRecyclable: [
+                    { name: 'Contaminated Items', items: ['Pizza boxes with grease', 'Food-soiled paper', 'Napkins and tissues'] },
+                    { name: 'Mixed Materials', items: ['Chip bags', 'Candy wrappers', 'Coffee cups with plastic lining'] },
+                    { name: 'Other', items: ['Styrofoam', 'Broken glass', 'Ceramic items', 'Light bulbs'] }
+                ]
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setScannedImage(reader.result);
+                        setScanResult(null);
+                        // Call Gemini API
+                        analyzeImageWithGemini(reader.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const analyzeImageWithGemini = async (imageData) => {
+                try {
+                    // Check if API key is set
+                    if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE' || !GEMINI_API_KEY) {
+                        throw new Error('Please set your Gemini API Key in the code');
+                    }
+
+                    // Remove data URL prefix to get base64 string
+                    const base64Image = imageData.split(',')[1];
+                    
+                    const requestBody = {
+                        contents: [{
+                            parts: [
+                                {
+                                    text: `Analyze this image and identify the item. Determine if it is recyclable or not. 
+                                    Respond ONLY in JSON format with this exact structure:
+                                    {
+                                        "type": "item name",
+                                        "recyclable": true or false,
+                                        "category": "Paper/Glass/Plastic/Metal/Contaminated/Mixed Materials/Other",
+                                        "confidence": number between 1-100
+                                    }
+                                    Be specific about the item type and category.`
+                                },
+                                {
+                                    inline_data: {
+                                        mime_type: "image/jpeg",
+                                        data: base64Image
+                                    }
+                                }
+                            ]
+                        }]
+                    };
+
+                    console.log('Sending request to Gemini API...');
+                    
+                    const response = await fetch(GEMINI_API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-goog-api-key': GEMINI_API_KEY
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    console.log('Response status:', response.status);
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        console.error('API Error Details:', errorData);
+                        throw new Error(`API Error: ${response.status} - ${JSON.stringify(errorData)}`);
+                    }
+
+                    const data = await response.json();
+                    console.log('API Response:', data);
+                    
+                    const resultText = data.candidates[0].content.parts[0].text;
+                    
+                    // Parse JSON from response
+                    const jsonMatch = resultText.match(/\{[\s\S]*\}/);
+                    if (jsonMatch) {
+                        const result = JSON.parse(jsonMatch[0]);
+                        setScanResult(result);
+                    } else {
+                        throw new Error('Invalid response format');
+                    }
+                } catch (error) {
+                    console.error('Error analyzing image:', error);
+                    console.error('Error details:', error.message);
+                    
+                    // Fallback to mock data if API fails
+                    setTimeout(() => {
+                        const results = [
+                            { type: 'Plastic Bottle', recyclable: true, category: 'Plastic (#1)', confidence: 94 },
+                            { type: 'Aluminum Can', recyclable: true, category: 'Metal', confidence: 98 },
+                            { type: 'Pizza Box', recyclable: false, category: 'Contaminated Paper', confidence: 87 },
+                            { type: 'Glass Jar', recyclable: true, category: 'Glass', confidence: 96 }
+                        ];
+                        setScanResult(results[Math.floor(Math.random() * results.length)]);
+                        alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
+                    }, 1000);
+                }
+            };
+
+            const handleFeedbackSubmit = () => {
+                if (feedback.trim()) {
+                    setFeedbackSubmitted(true);
+                    setTimeout(() => {
+                        setFeedback('');
+                        setFeedbackSubmitted(false);
+                    }, 3000);
+                }
+            };
+
+            const WelcomePage = () => (
+                <div className="min-h-screen bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 flex items-center justify-center p-6">
+                    <div className="text-center">
+                        <div className="mb-8 flex justify-center">
+                            <div className="bg-white rounded-full p-8 shadow-2xl">
+                                <Trash2 className="w-24 h-24 text-green-600" />
+                            </div>
+                        </div>
+                        <h1 className="text-5xl font-bold text-white mb-4">Welcome to</h1>
+                        <h2 className="text-6xl font-extrabold text-white mb-8">Recycling Scanner</h2>
+                        <p className="text-xl text-white mb-12 max-w-md mx-auto">
+                            Scan items, learn about recycling, and compete on the leaderboard!
+                        </p>
+                        <button
+                            onClick={() => setCurrentPage('home')}
+                            className="bg-white text-green-600 px-12 py-4 rounded-full text-xl font-bold hover:bg-green-50 transform hover:scale-105 transition shadow-lg"
+                        >
+                            Start Scanning
+                        </button>
+                    </div>
+                </div>
+            );
+
+            const HomePage = () => (
+                <div className="min-h-screen bg-gray-50">
+                    <header className="bg-green-600 text-white p-4 shadow-lg">
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 hover:bg-green-700 rounded-lg">
+                                {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                            </button>
+                            <h1 className="text-2xl font-bold">Recycling Scanner</h1>
+                            <div className="w-10"></div>
+                        </div>
+                    </header>
+
+                    {menuOpen && (
+                        <div className="bg-white shadow-lg border-b">
+                            <button
+                                onClick={() => { setCurrentPage('home'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <Home className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Home</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('information'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <Info className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Information</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('feedback'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <MessageSquare className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Feedback</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('welcome'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100"
+                            >
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                                <span className="font-medium">Back to Welcome</span>
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="p-6 max-w-4xl mx-auto">
+                        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <Trophy className="w-8 h-8 text-yellow-500" />
+                                <h2 className="text-2xl font-bold text-gray-800">Leaderboard</h2>
+                            </div>
+                            <div className="space-y-3">
+                                {leaderboard.map((user, index) => (
+                                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
+                                                index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-green-600'
+                                            }`}>
+                                                {index + 1}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-800">{user.name}</p>
+                                                <p className="text-sm text-gray-500">{user.items} items recycled</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-2xl font-bold text-green-600">{user.score}</p>
+                                            <p className="text-xs text-gray-500">points</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-8 text-center">
+                            <h3 className="text-2xl font-bold text-white mb-4">Scan Your Item</h3>
+                            <p className="text-white mb-6">Take a photo or upload an image to identify recyclable items</p>
+                            <div className="flex gap-4 justify-center flex-wrap">
+                                <button
+                                    onClick={() => uploadInputRef.current?.click()}
+                                    className="bg-white text-green-600 px-6 py-3 rounded-lg font-semibold hover:bg-green-50 transition flex items-center gap-2"
+                                >
+                                    <Upload className="w-5 h-5" />
+                                    Upload Image
+                                </button>
+                                <button
+                                    onClick={() => cameraInputRef.current?.click()}
+                                    className="bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold hover:bg-emerald-800 transition flex items-center gap-2"
+                                >
+                                    <Camera className="w-5 h-5" />
+                                    Take Photo
+                                </button>
+                            </div>
+                            {/* Upload file input - opens file manager */}
+                            <input
+                                ref={uploadInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                            />
+                            {/* Camera input - opens camera */}
+                            <input
+                                ref={cameraInputRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                            />
+                        </div>
+
+                        {scannedImage && (
+                            <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
+                                <h3 className="text-xl font-bold mb-4">Scan Result</h3>
+                                <img src={scannedImage} alt="Scanned" className="w-full max-h-64 object-contain rounded-lg mb-4" />
+                                {scanResult ? (
+                                    <div className={`p-4 rounded-lg ${scanResult.recyclable ? 'bg-green-50 border-2 border-green-500' : 'bg-red-50 border-2 border-red-500'}`}>
+                                        <p className="text-lg font-bold mb-2">{scanResult.type}</p>
+                                        <p className="text-sm mb-1">Category: {scanResult.category}</p>
+                                        <div className="mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm">Confidence: {scanResult.confidence}%</span>
+                                                <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                                    <div 
+                                                        className={`h-full rounded-full ${
+                                                            scanResult.confidence >= 90 ? 'bg-green-500' :
+                                                            scanResult.confidence >= 70 ? 'bg-yellow-500' :
+                                                            'bg-orange-500'
+                                                        }`}
+                                                        style={{width: `${scanResult.confidence}%`}}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                            {scanResult.confidence < 70 && (
+                                                <p className="text-xs text-orange-600 mt-1">⚠️ Low confidence - please verify manually</p>
+                                            )}
+                                        </div>
+                                        <p className={`font-bold text-lg ${scanResult.recyclable ? 'text-green-600' : 'text-red-600'}`}>
+                                            {scanResult.recyclable ? '♻️ RECYCLABLE' : '❌ NOT RECYCLABLE'}
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-gray-500">Analyzing image...</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            const InformationPage = () => (
+                <div className="min-h-screen bg-gray-50">
+                    <header className="bg-green-600 text-white p-4 shadow-lg">
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 hover:bg-green-700 rounded-lg">
+                                {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                            </button>
+                            <h1 className="text-2xl font-bold">Recycling Information</h1>
+                            <div className="w-10"></div>
+                        </div>
+                    </header>
+
+                    {menuOpen && (
+                        <div className="bg-white shadow-lg border-b">
+                            <button
+                                onClick={() => { setCurrentPage('home'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <Home className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Home</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('information'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <Info className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Information</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('feedback'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <MessageSquare className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Feedback</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('welcome'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100"
+                            >
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                                <span className="font-medium">Back to Welcome</span>
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="p-6 max-w-4xl mx-auto">
+                        <div className="mb-8">
+                            <h2 className="text-3xl font-bold text-green-600 mb-2">♻️ Recyclable Items</h2>
+                            <p className="text-gray-600">These items can be recycled in most areas</p>
+                        </div>
+
+                        <div className="space-y-4 mb-12">
+                            {recyclingInfo.recyclable.map((category, index) => (
+                                <div key={index} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-3">{category.name}</h3>
+                                    <ul className="space-y-2">
+                                        {category.items.map((item, idx) => (
+                                            <li key={idx} className="flex items-center gap-2 text-gray-700">
+                                                <span className="text-green-500">✓</span>
+                                                {item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="mb-8">
+                            <h2 className="text-3xl font-bold text-red-600 mb-2">❌ Non-Recyclable Items</h2>
+                            <p className="text-gray-600">These items should go in regular trash</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            {recyclingInfo.nonRecyclable.map((category, index) => (
+                                <div key={index} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+                                    <h3 className="text-xl font-bold text-gray-800 mb-3">{category.name}</h3>
+                                    <ul className="space-y-2">
+                                        {category.items.map((item, idx) => (
+                                            <li key={idx} className="flex items-center gap-2 text-gray-700">
+                                                <span className="text-red-500">✗</span>
+                                                {item}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            const FeedbackPage = () => (
+                <div className="min-h-screen bg-gray-50">
+                    <header className="bg-green-600 text-white p-4 shadow-lg">
+                        <div className="flex items-center justify-between">
+                            <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 hover:bg-green-700 rounded-lg">
+                                {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                            </button>
+                            <h1 className="text-2xl font-bold">Feedback</h1>
+                            <div className="w-10"></div>
+                        </div>
+                    </header>
+
+                    {menuOpen && (
+                        <div className="bg-white shadow-lg border-b">
+                            <button
+                                onClick={() => { setCurrentPage('home'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <Home className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Home</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('information'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <Info className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Information</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('feedback'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100 border-b"
+                            >
+                                <MessageSquare className="w-5 h-5 text-green-600" />
+                                <span className="font-medium">Feedback</span>
+                            </button>
+                            <button
+                                onClick={() => { setCurrentPage('welcome'); setMenuOpen(false); }}
+                                className="w-full px-6 py-4 flex items-center gap-3 hover:bg-gray-100"
+                            >
+                                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                                <span className="font-medium">Back to Welcome</span>
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="p-6 max-w-2xl mx-auto">
+                        <div className="bg-white rounded-xl shadow-lg p-8">
+                            <div className="flex items-center gap-3 mb-6">
+                                <MessageSquare className="w-8 h-8 text-green-600" />
+                                <h2 className="text-3xl font-bold text-gray-800">We Value Your Feedback</h2>
+                            </div>
+                            
+                            <p className="text-gray-600 mb-6">
+                                Help us improve the Recycling Scanner! Share your thoughts, suggestions, or report any issues you've encountered.
+                            </p>
+
+                            <textarea
+                                value={feedback}
+                                onChange={(e) => setFeedback(e.target.value)}
+                                placeholder="Tell us what you think..."
+                                className="w-full h-48 p-4 border-2 border-gray-300 rounded-lg focus:border-green-500 focus:outline-none resize-none"
+                            />
+
+                            <button
+                                onClick={handleFeedbackSubmit}
+                                disabled={!feedback.trim()}
+                                className="w-full mt-4 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+                            >
+                                Submit Feedback
+                            </button>
+
+                            {feedbackSubmitted && (
+                                <div className="mt-4 p-4 bg-green-50 border-2 border-green-500 rounded-lg text-center">
+                                    <p className="text-green-700 font-semibold">✓ Thank you for your feedback!</p>
+                                    <p className="text-green-600 text-sm">We appreciate your input.</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-8 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
+                            <h3 className="text-xl font-bold mb-3">Quick Tips</h3>
+                            <ul className="space-y-2 text-sm">
+                                <li>• Be specific about any issues you encounter</li>
+                                <li>• Share ideas for new features you'd like to see</li>
+                                <li>• Let us know if scanning accuracy can be improved</li>
+                                <li>• Report any incorrect recycling information</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            return (
+                <>
+                    {currentPage === 'welcome' && <WelcomePage />}
+                    {currentPage === 'home' && <HomePage />}
+                    {currentPage === 'information' && <InformationPage />}
+                    {currentPage === 'feedback' && <FeedbackPage />}
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<RecyclingScanner />);
+    </script>
+</body>
+</html>
