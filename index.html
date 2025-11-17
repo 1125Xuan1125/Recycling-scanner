@@ -224,7 +224,8 @@
             password, setPassword, 
             username, setUsername, 
             isLoginView, setIsLoginView, 
-            authError 
+            authError,
+            signupSuccess // *** 新增 ***
         }) => (
             <div className="min-h-screen bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 flex items-center justify-center p-6">
                 <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
@@ -269,6 +270,12 @@
                             />
                         </div>
                         
+                        {/* *** 修改：添加注册成功提示 *** */}
+                        {signupSuccess && (
+                            <p className="text-sm text-green-600 text-center">
+                                Sign up successful! Please log in.
+                            </p>
+                        )}
                         {authError && (
                             <p className="text-sm text-red-600 text-center">{authError}</p>
                         )}
@@ -714,35 +721,33 @@
             const [email, setEmail] = useState('');
             const [password, setPassword] = useState('');
             const [username, setUsername] = useState('');
-            const [isLoginView, setIsLoginView] = useState(true); 
+            const [isLoginView, setIsLoginView] = useState(true);
+            
+            // *** 新增：注册成功状态 ***
+            const [signupSuccess, setSignupSuccess] = useState(false);
 
             // --- Firebase 效果钩子 ---
 
             // 1. 轮询 (Polling) 增加错误检查
             useEffect(() => {
                 const intervalId = setInterval(() => {
-                    // 1. 检查成功
                     if (window.firebase) {
                         console.log("Firebase is ready.");
                         setFirebaseReady(true);
                         clearInterval(intervalId);
-                        return; // 停止
+                        return;
                     }
-                    
-                    // 2. 检查失败
                     if (window.firebaseError) {
                         console.error("Firebase critical error detected:", window.firebaseError);
-                        setCriticalError(window.firebaseError); // 设置错误状态
-                        setFirebaseReady(false); // 确保为 false
-                        setIsAuthLoading(false); // 停止认证加载
-                        clearInterval(intervalId); // 停止轮询
-                        return; // 停止
+                        setCriticalError(window.firebaseError); 
+                        setFirebaseReady(false); 
+                        setIsAuthLoading(false); 
+                        clearInterval(intervalId); 
+                        return;
                     }
-
                     console.log("Waiting for firebase...");
-                }, 100); // 每 100ms 检查一次
+                }, 100); 
 
-                // 10 秒超时
                 const timeoutId = setTimeout(() => {
                     clearInterval(intervalId);
                     if (!window.firebase && !window.firebaseError) {
@@ -756,10 +761,10 @@
                     clearInterval(intervalId);
                     clearTimeout(timeoutId);
                 };
-            }, []); // [] 确保只在组件挂载时运行一次
+            }, []); 
 
             // 2. 监听认证状态 (依赖 firebaseReady)
-            // *** 修改：添加了 try...catch...finally ***
+            // *** 修改：移除了 'currentPage' 依赖 ***
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -767,7 +772,6 @@
                     try {
                         if (authUser) {
                             setUser(authUser);
-                            // 尝试获取用户文档
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
                             
@@ -775,31 +779,29 @@
                                 setUserProfile(userDocSnap.data());
                             } else {
                                 console.warn("User doc not found for UID:", authUser.uid);
-                                setUserProfile(null); // 确保重置
+                                setUserProfile(null); 
                             }
                             setCurrentPage('home'); 
                         } else {
-                            // 用户未登录
                             setUser(null);
                             setUserProfile(null);
-                            if (currentPage !== 'welcome' && currentPage !== 'login') {
+                            // 只有当用户主动登出或会话过期时才切换到登录页
+                            // 保持 'welcome' 页面不动
+                            if (currentPage !== 'welcome') {
                                 setCurrentPage('login');
                             }
                         }
                     } catch (error) {
-                        // 捕获 getDoc 失败等错误
                         console.error("Error during auth state change processing:", error);
-                        // 即使出错，也要让用户知道
-                        setUser(authUser); // 可能只有 authUser，没有 profile
-                        setUserProfile(null); // 无法获取 profile
-                        if(authUser) setCurrentPage('home'); // 至少让他们进主页
+                        setUser(authUser); 
+                        setUserProfile(null);
+                        if(authUser) setCurrentPage('home');
                     } finally {
-                        // *** 关键：无论成功与否，都必须设置 loading 结束 ***
                         setIsAuthLoading(false); 
                     }
                 });
                 return () => unsubscribe();
-            }, [firebaseReady, currentPage]); // 保持 currentPage 依赖
+            }, [firebaseReady]); // *** 依赖已修复 ***
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
@@ -839,12 +841,12 @@
                 }
 
                 if (isLoginView) {
+                    // *** 修改：登录时清除注册成功提示 ***
+                    setSignupSuccess(false);
                     try {
-                        // ** 调试：打印登录尝试 **
                         console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
                         console.log("Login successful");
-                        // 状态变更将由 onAuthStateChanged 处理
                     } catch (error) {
                         console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
@@ -855,7 +857,6 @@
                         return;
                     }
                     try {
-                        // ** 调试：打印注册尝试 **
                         console.log("Attempting sign up for:", email);
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
                         const user = userCredential.user;
@@ -870,7 +871,15 @@
                             joinedAt: new Date()
                         });
                         console.log("User doc created.");
-                        // 状态变更将由 onAuthStateChanged 处理
+
+                        // *** 修改：注册成功后登出，并显示提示 ***
+                        await window.firebase.signOut(window.firebase.auth);
+                        setSignupSuccess(true);  // 显示成功消息
+                        setIsLoginView(true);     // 切换到登录视图
+                        setEmail('');             // 清空字段
+                        setPassword('');
+                        setUsername('');
+                        
                     } catch (error) {
                         console.error("Sign up failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
@@ -878,7 +887,6 @@
                 }
             };
             
-            // *** 修改：更新了 auth/invalid-credential 的提示 ***
             const getFriendlyErrorMessage = (error) => {
                 switch(error.code) {
                     case 'auth/invalid-email':
@@ -911,6 +919,7 @@
                 setUsername('');
                 setAuthError('');
                 setIsLoginView(true);
+                setSignupSuccess(false); // *** 新增：登出时清除提示 ***
                 setCurrentPage('login'); 
             };
 
@@ -1037,7 +1046,7 @@
                 return <CriticalErrorPage message={criticalError} />;
             }
             
-            if (isAuthLoading) { // *** 修改：现在只检查 isAuthLoading ***
+            if (isAuthLoading) { 
                 return <LoadingPage />;
             }
             
@@ -1058,6 +1067,7 @@
                             isLoginView={isLoginView}
                             setIsLoginView={setIsLoginView}
                             authError={authError}
+                            signupSuccess={signupSuccess} // *** 传递 ***
                         />}
                     
                     {currentPage === 'home' && user && 
