@@ -291,6 +291,8 @@
                     <button 
                         onClick={() => {
                             setIsLoginView(!isLoginView);
+                            setAuthError(''); // 切换时清除错误
+                            setSignupSuccess(false); // 切换时清除成功
                         }}
                         className="w-full mt-4 text-sm text-green-600 hover:underline"
                     >
@@ -764,13 +766,16 @@
             }, []); 
 
             // 2. 监听认证状态 (依赖 firebaseReady)
-            // *** 修改：移除了 'currentPage' 依赖 ***
+            // *** 修改：这是我们的新逻辑 ***
             useEffect(() => {
                 if (!firebaseReady) return; 
 
+                // 这个监听器只在 *应用加载时* 检查你是否 *已经* 登录
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
                     try {
                         if (authUser) {
+                            // 1. 用户已登录
+                            console.log("Auth listener: User is already logged in.", authUser.uid);
                             setUser(authUser);
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
@@ -781,27 +786,27 @@
                                 console.warn("User doc not found for UID:", authUser.uid);
                                 setUserProfile(null); 
                             }
-                            setCurrentPage('home'); 
+                            setCurrentPage('home'); // 自动导航到主页
                         } else {
+                            // 2. 用户未登录
+                            console.log("Auth listener: User is not logged in.");
                             setUser(null);
                             setUserProfile(null);
-                            // 只有当用户主动登出或会话过期时才切换到登录页
-                            // 保持 'welcome' 页面不动
-                            if (currentPage !== 'welcome') {
-                                setCurrentPage('login');
-                            }
+                            // *** 关键：如果用户未登录，我们什么也不做。
+                            // 我们让他们停留在 'welcome' 页面 (默认状态)
+                            // setCurrentPage('login'); // <-- 移除这一行
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
                         setUser(authUser); 
                         setUserProfile(null);
-                        if(authUser) setCurrentPage('home');
+                        if(authUser) setCurrentPage('home'); // 尽力尝试
                     } finally {
-                        setIsAuthLoading(false); 
+                        setIsAuthLoading(false); // 无论如何都结束 loading
                     }
                 });
                 return () => unsubscribe();
-            }, [firebaseReady]); // *** 依赖已修复 ***
+            }, [firebaseReady]); // *** 依赖已修复，只依赖 firebaseReady ***
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
@@ -835,23 +840,28 @@
             const handleAuthAction = async (e) => {
                 e.preventDefault();
                 setAuthError(''); 
+                setSignupSuccess(false); // *** 新增：每次点击都清除旧消息 ***
+                
                 if (!firebaseReady) {
                     setAuthError("Firebase is not ready. Please wait.");
                     return;
                 }
 
                 if (isLoginView) {
-                    // *** 修改：登录时清除注册成功提示 ***
-                    setSignupSuccess(false);
+                    // *** 登录逻辑 ***
                     try {
                         console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
                         console.log("Login successful");
+                        // 登录成功！
+                        // onAuthStateChanged 监听器会 *自动* 发现变化
+                        // 并处理导航到 'home'
                     } catch (error) {
                         console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 } else {
+                    // *** 注册逻辑 ***
                     if (!username) {
                         setAuthError('Please enter a username');
                         return;
@@ -873,7 +883,8 @@
                         console.log("User doc created.");
 
                         // *** 修改：注册成功后登出，并显示提示 ***
-                        await window.firebase.signOut(window.firebase.auth);
+                        await window.firebase.signOut(window.firebase.auth); // 立即登出
+                        console.log("User signed out, showing success message.");
                         setSignupSuccess(true);  // 显示成功消息
                         setIsLoginView(true);     // 切换到登录视图
                         setEmail('');             // 清空字段
@@ -910,21 +921,25 @@
             };
             
             const handleLogout = async () => {
+                console.log("Logging out...");
                 setMenuOpen(false);
                 setProfileOpen(false); 
                 if (!firebaseReady) return;
+                
                 await window.firebase.signOut(window.firebase.auth);
+                
+                // *** 修改：登出后手动设置状态 ***
                 setEmail('');
                 setPassword('');
                 setUsername('');
                 setAuthError('');
                 setIsLoginView(true);
-                setSignupSuccess(false); // *** 新增：登出时清除提示 ***
-                setCurrentPage('login'); 
+                setSignupSuccess(false); 
+                setCurrentPage('login'); // *** 手动导航到登录页 ***
             };
 
 
-            // --- 图像处理函数 ---
+            // --- 图像处理函数 (保持不变) ---
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
