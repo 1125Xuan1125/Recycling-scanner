@@ -90,8 +90,9 @@
         const { useState, useRef, useEffect } = React;
 
         // Gemini API Configuration
+        // *** 修复了 'generativelen' 拼写错误 ***
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
-        const GEMINI_API_URL = 'https://generativelen.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
         // --- Icon components (保持不变) ---
         const Camera = ({ className }) => (
@@ -177,7 +178,8 @@
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <p className="text-lg text-gray-700">Loading...</p>
+                    {/* *** 修改：添加了版本号 *** */}
+                    <p className="text-lg text-gray-700">Loading... (v1.1)</p>
                 </div>
             </div>
         );
@@ -777,6 +779,7 @@
             }, []); 
 
             // 2. 监听认证状态 (依赖 firebaseReady)
+            // *** 这是来自 'Fix Auth Logic' 版本的正确逻辑 ***
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -799,6 +802,8 @@
                             console.log("Auth listener: User is not logged in.");
                             setUser(null);
                             setUserProfile(null);
+                            // *** 关键：如果用户未登录，我们什么也不做。
+                            // 我们让他们停留在 'welcome' 页面 (默认状态)
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
@@ -810,7 +815,7 @@
                     }
                 });
                 return () => unsubscribe();
-            }, [firebaseReady]); 
+            }, [firebaseReady]); // *** 依赖已修复，只依赖 firebaseReady ***
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
@@ -937,13 +942,14 @@
                 
                 await window.firebase.signOut(window.firebase.auth);
                 
+                // *** 修改：登出后手动设置状态 ***
                 setEmail('');
                 setPassword('');
                 setUsername('');
                 setAuthError('');
                 setIsLoginView(true);
                 setSignupSuccess(false); 
-                setCurrentPage('login'); 
+                setCurrentPage('login'); // *** 手动导航到登录页 ***
             };
 
 
