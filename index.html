@@ -336,7 +336,7 @@
                         <p className="text-lg font-medium text-gray-700 break-all">
                             {user?.email}
                         </p>
-                        {/* *** 修改：修复了 N/A 问题 *** */}
+                        {/* *** 修复 N/A 问题的逻辑 *** */}
                         <p className="text-sm text-gray-500 mb-6">
                             Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
                         </p>
@@ -424,7 +424,8 @@
                                             {index + 1}
                                         </div>
                                         <div>
-                                            <p className="font-semibold text-gray-800">{user.name}</p>
+                                            {/* *** 修复 N/A 问题的逻辑 *** */}
+                                            <p className="font-semibold text-gray-800">{user.name ? user.name : '...'}</p>
                                             <p className="text-sm text-gray-500">{user.items} items recycled</p>
                                         </div>
                                     </div>
@@ -840,9 +841,11 @@
                     usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
                     
                     const formattedLeaderboard = usersData.map(user => ({
-                        name: user.username || user.email, 
+                        // *** 修复 N/A 问题的逻辑 ***
+                        name: user.username ? user.username : (user.email ? user.email.split('@')[0] : '...'), 
                         score: user.score || 0,
-                        items: user.items || 0
+                        items: user.items || 0,
+                        id: user.id
                     }));
                     setLeaderboard(formattedLeaderboard.slice(0, 5));
                 }, (error) => {
@@ -895,7 +898,7 @@
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
-                            username: username,
+                            username: username, // *** 保持用户注册的 username ***
                             score: 0,
                             items: 0,
                             joinedAt: new Date()
@@ -959,7 +962,7 @@
             };
 
 
-            // --- 图像处理函数 (保持不变) ---
+            // --- 图像处理函数 ---
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -1021,14 +1024,17 @@
                     if (jsonMatch) {
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
-
-                        if (result.recyclable && user && firebaseReady) {
+                        
+                        // *** 修复：使用 auth.currentUser 来避免 stale closure ***
+                        const currentUser = window.firebase.auth.currentUser;
+                        if (result.recyclable && currentUser && firebaseReady) { // <-- 检查 currentUser
                             try {
-                                const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
+                                const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid); // <-- 使用 currentUser.uid
                                 await window.firebase.updateDoc(userDocRef, {
                                     score: window.firebase.increment(10), 
                                     items: window.firebase.increment(1)
                                 });
+                                console.log("Score updated for:", currentUser.uid);
                             } catch (updateError) {
                                 console.error("Failed to update score:", updateError);
                             }
@@ -1049,9 +1055,11 @@
                         const mockResult = results[Math.floor(Math.random() * results.length)];
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
-
-                        if (mockResult.recyclable && user && firebaseReady) {
-                            const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
+                        
+                        // *** 修复：在 fallback 中也使用 auth.currentUser ***
+                        const currentUser = window.firebase.auth.currentUser;
+                        if (mockResult.recyclable && currentUser && firebaseReady) {
+                            const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid);
                             try {
                                 await window.firebase.updateDoc(userDocRef, {
                                     score: window.firebase.increment(10),
