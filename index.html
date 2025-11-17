@@ -740,11 +740,10 @@
             
             const [signupSuccess, setSignupSuccess] = useState(false);
             
-            // *** 新增：用于清理监听器 ***
             const leaderboardListener = useRef(null);
             
-            // *** 新增：用于修复白屏的“哨兵”状态 ***
-            const [isSigningUp, setIsSigningUp] = useState(false);
+            // *** 修复：将 'isSigningUp' 哨兵从 useState 改为 useRef ***
+            const isSigningUp = useRef(false);
 
             // --- Firebase 效果钩子 ---
 
@@ -790,9 +789,8 @@
 
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
                     
-                    // *** 修复：在改变用户之前，先清理旧的 leaderboard 监听器 ***
                     if (leaderboardListener.current) {
-                        leaderboardListener.current(); // 调用 unsubscribe
+                        leaderboardListener.current(); 
                         leaderboardListener.current = null;
                     }
                     
@@ -807,12 +805,10 @@
                                 console.log("User doc found.");
                                 setUserProfile(userDocSnap.data());
                             } else {
-                                // *** 修复：不再自动创建 profile ***
                                 console.warn("User doc not found! This might be due to Firestore rules.");
-                                setUserProfile(null); // 设置为 null
+                                setUserProfile(null); 
                             }
                             
-                            // *** 修复：在这里启动 Leaderboard 监听器 ***
                             const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
                             const q = window.firebase.query(usersCollectionRef);
                             leaderboardListener.current = window.firebase.onSnapshot(q, (snapshot) => {
@@ -833,34 +829,33 @@
                                 console.error("Error listening to leaderboard:", error);
                             });
 
-                            // *** 修复：只有在不是“注册中”时才自动导航 ***
-                            if (!isSigningUp) {
+                            // *** 修复：使用 ref 检查哨兵 ***
+                            if (!isSigningUp.current) {
                                 setCurrentPage('home'); 
                             }
                         } else {
                             console.log("Auth listener: User is not logged in.");
                             setUser(null);
                             setUserProfile(null);
-                            setLeaderboard([]); // 清空排行榜
+                            setLeaderboard([]); 
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
                         setUser(authUser); 
                         setUserProfile(null);
-                        if(authUser && !isSigningUp) setCurrentPage('home'); // 尽力尝试
+                        if(authUser && !isSigningUp.current) setCurrentPage('home'); 
                     } finally {
                         setIsAuthLoading(false); 
                     }
                 });
                 
-                // 返回一个函数来清理 auth 监听器
                 return () => {
                     unsubscribe();
                     if (leaderboardListener.current) {
-                        leaderboardListener.current(); // 确保组件卸载时也清理
+                        leaderboardListener.current(); 
                     }
                 };
-            }, [firebaseReady, isSigningUp]); // *** 依赖已修复，添加 isSigningUp ***
+            }, [firebaseReady]); // *** 依赖已修复，移除了 isSigningUp ***
 
             // 3. 监听排行榜数据 (useEffect 已被合并到上面)
 
@@ -884,12 +879,10 @@
                         console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
                         console.log("Login successful");
-                        // onAuthStateChanged 会自动处理导航
-                        // *** 修复：成功时，isAuthLoading 会变 true，所以我们不需要手动停止按钮加载 ***
                     } catch (error) {
                         console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
-                        setIsAuthActionLoading(false); // *** 只在失败时停止按钮加载 ***
+                        setIsAuthActionLoading(false); 
                     }
                 } else {
                     // *** 注册逻辑 ***
@@ -899,8 +892,8 @@
                         return;
                     }
                     
-                    // *** 修复：设置“哨兵” ***
-                    setIsSigningUp(true);
+                    // *** 修复：设置 ref 哨兵 ***
+                    isSigningUp.current = true;
                     
                     try {
                         console.log("Attempting sign up for:", email);
@@ -911,7 +904,7 @@
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
-                            username: username, // *** 保持用户注册的 username ***
+                            username: username, 
                             score: 0,
                             items: 0,
                             joinedAt: new Date()
@@ -930,8 +923,9 @@
                         console.error("Sign up failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     } finally {
-                        setIsAuthActionLoading(false); // *** 注册总是在 finally 中停止加载 ***
-                        setIsSigningUp(false); // *** 修复：清除“哨兵” ***
+                        setIsAuthActionLoading(false); 
+                        // *** 修复：清除 ref 哨兵 ***
+                        isSigningUp.current = false; 
                     }
                 }
             };
@@ -1039,11 +1033,10 @@
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
                         
-                        // *** 修复：使用 auth.currentUser 来避免 stale closure ***
                         const currentUser = window.firebase.auth.currentUser;
-                        if (result.recyclable && currentUser && firebaseReady) { // <-- 检查 currentUser
+                        if (result.recyclable && currentUser && firebaseReady) { 
                             try {
-                                const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid); // <-- 使用 currentUser.uid
+                                const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid); 
                                 await window.firebase.updateDoc(userDocRef, {
                                     score: window.firebase.increment(10), 
                                     items: window.firebase.increment(1)
@@ -1070,7 +1063,6 @@
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
                         
-                        // *** 修复：在 fallback 中也使用 auth.currentUser ***
                         const currentUser = window.firebase.auth.currentUser;
                         if (mockResult.recyclable && currentUser && firebaseReady) {
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid);
