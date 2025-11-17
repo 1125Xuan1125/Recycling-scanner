@@ -34,6 +34,7 @@
         updateDoc,
         increment
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
+      // *** 移除 Storage ***
 
       try {
         // try...catch 块现在只包裹执行代码
@@ -53,6 +54,7 @@
           app,
           auth: getAuth(app),
           db: getFirestore(app),
+          // *** 移除 Storage ***
           onAuthStateChanged,
           createUserWithEmailAndPassword,
           signInWithEmailAndPassword,
@@ -65,6 +67,7 @@
           query,
           updateDoc,
           increment
+          // *** 移除 Storage 函数 ***
         };
         
         console.log("Firebase module script loaded and initialized.");
@@ -151,6 +154,13 @@
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         );
+        
+        const Spinner = ({ className }) => (
+            <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        );
         // --- End Icon Components ---
 
         // 静态信息 (移到外部)
@@ -173,12 +183,9 @@
         const LoadingPage = () => (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center">
                 <div className="text-center">
-                    <svg className="animate-spin h-10 w-10 text-green-600 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    {/* *** 保持 v1.1 用于缓存测试 *** */}
-                    <p className="text-lg text-gray-700">Loading... (v1.1)</p>
+                    <Spinner className="h-10 w-10 text-green-600 mx-auto mb-4" />
+                    {/* *** 修改：移除了 (v1.1) *** */}
+                    <p className="text-lg text-gray-700">Loading...</p>
                 </div>
             </div>
         );
@@ -287,10 +294,7 @@
                             className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center disabled:bg-gray-400"
                         >
                             {isAuthActionLoading ? (
-                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
+                                <Spinner className="h-5 w-5 text-white" />
                             ) : (
                                 isLoginView ? 'Login' : 'Sign Up'
                             )}
@@ -311,7 +315,12 @@
             </div>
         );
 
-        const ProfileModal = ({ user, userProfile, handleLogout, setProfileOpen }) => (
+        const ProfileModal = ({ 
+            user, 
+            userProfile, 
+            handleLogout, 
+            setProfileOpen
+        }) => (
             <div 
                 className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
                 onClick={() => setProfileOpen(false)} 
@@ -329,13 +338,16 @@
                     
                     <div className="flex flex-col items-center">
                         <h2 className="text-2xl font-bold text-gray-800 mb-4">Profile</h2>
-                        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                        
+                        <div
+                            className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4 relative"
+                        >
                             <UserCircle className="w-20 h-20 text-green-600" />
                         </div>
+                        
                         <p className="text-lg font-medium text-gray-700 break-all">
                             {user?.email}
                         </p>
-                        {/* *** 修复 N/A 问题的逻辑 *** */}
                         <p className="text-sm text-gray-500 mb-6">
                             Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
                         </p>
@@ -355,7 +367,10 @@
         const HomePage = ({
             setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
             leaderboard, uploadInputRef, cameraInputRef, handleImageUpload,
-            scannedImage, scanResult
+            scannedImage, scanResult,
+            // *** 新增 Props ***
+            handleAddScore,
+            scoreAdded
         }) => (
             <div className="min-h-screen bg-gray-50">
                 <header className="bg-green-600 text-white p-4 shadow-lg">
@@ -407,7 +422,7 @@
                 )}
 
                 <div className="p-6 max-w-4xl mx-auto">
-                    {/* ... (排行榜和扫描部分保持不变) ... */}
+                    {/* ... (排行榜) ... */}
                     <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
                         <div className="flex items-center gap-3 mb-4">
                             <Trophy className="w-8 h-8 text-yellow-500" />
@@ -423,7 +438,6 @@
                                             {index + 1}
                                         </div>
                                         <div>
-                                            {/* *** 修复 N/A 问题的逻辑 *** */}
                                             <p className="font-semibold text-gray-800">{user.name ? user.name : '...'}</p>
                                             <p className="text-sm text-gray-500">{user.items} items recycled</p>
                                         </div>
@@ -438,6 +452,7 @@
                             )}
                         </div>
                     </div>
+                    {/* ... (扫描按钮) ... */}
                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-8 text-center">
                         <h3 className="text-2xl font-bold text-white mb-4">Scan Your Item</h3>
                         <p className="text-white mb-6">Take a photo or upload an image to identify recyclable items</p>
@@ -473,42 +488,56 @@
                             className="hidden"
                         />
                     </div>
+                    
+                    {/* *** 修改：扫描结果区域 *** */}
                     {scannedImage && (
                         <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
                             <h3 className="text-xl font-bold mb-4">Scan Result</h3>
                             <img src={scannedImage} alt="Scanned" className="w-full max-h-64 object-contain rounded-lg mb-4" />
                             {scanResult ? (
-                                <div className={`p-4 rounded-lg ${scanResult.recyclable ? 'bg-green-50 border-2 border-green-500' : 'bg-red-50 border-2 border-red-500'}`}>
-                                    <p className="text-lg font-bold mb-2">{scanResult.type}</p>
-                                    <p className="text-sm mb-1">Category: {scanResult.category}</p>
-                                    <div className="mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">Confidence: {scanResult.confidence}%</span>
-                                            <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-                                                <div 
-                                                    className={`h-full rounded-full ${
-                                                        scanResult.confidence >= 90 ? 'bg-green-500' :
-                                                        scanResult.confidence >= 70 ? 'bg-yellow-500' :
-                                                        'bg-orange-500'
-                                                    }`}
-                                                    style={{width: `${scanResult.confidence}%`}}
-                                                ></div>
+                                <> {/* *** 修改：添加 Fragment *** */}
+                                    <div className={`p-4 rounded-lg ${scanResult.recyclable ? 'bg-green-50 border-2 border-green-500' : 'bg-red-50 border-2 border-red-500'}`}>
+                                        <p className="text-lg font-bold mb-2">{scanResult.type}</p>
+                                        <p className="text-sm mb-1">Category: {scanResult.category}</p>
+                                        <div className="mb-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm">Confidence: {scanResult.confidence}%</span>
+                                                <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                                    <div 
+                                                        className={`h-full rounded-full ${
+                                                            scanResult.confidence >= 90 ? 'bg-green-500' :
+                                                            scanResult.confidence >= 70 ? 'bg-yellow-500' :
+                                                            'bg-orange-500'
+                                                        }`}
+                                                        style={{width: `${scanResult.confidence}%`}}
+                                                    ></div>
+                                                </div>
                                             </div>
+                                            {scanResult.confidence < 70 && (
+                                                <p className="text-xs text-orange-600 mt-1">⚠️ Low confidence - please verify manually</p>
+                                            )}
                                         </div>
-                                        {scanResult.confidence < 70 && (
-                                            <p className="text-xs text-orange-600 mt-1">⚠️ Low confidence - please verify manually</p>
-                                        )}
+                                        <p className={`font-bold text-lg ${scanResult.recyclable ? 'text-green-600' : 'text-red-600'}`}>
+                                            {scanResult.recyclable ? '♻️ RECYCLABLE' : '❌ NOT RECYCLABLE'}
+                                        </p>
                                     </div>
-                                    <p className={`font-bold text-lg ${scanResult.recyclable ? 'text-green-600' : 'text-red-600'}`}>
-                                        {scanResult.recyclable ? '♻️ RECYCLABLE' : '❌ NOT RECYCLABLE'}
-                                    </p>
-                                </div>
+                                    
+                                    {/* *** 新增：Recycle 按钮 *** */}
+                                    <button
+                                        onClick={handleAddScore}
+                                        disabled={!scanResult.recyclable || scoreAdded}
+                                        className={`w-full mt-4 py-3 rounded-lg font-semibold text-white transition ${
+                                            (!scanResult.recyclable || scoreAdded)
+                                                ? 'bg-gray-400 cursor-not-allowed'
+                                                : 'bg-green-600 hover:bg-green-700'
+                                        }`}
+                                    >
+                                        {scoreAdded ? '✓ Added!' : 'Recycle! (+10 Points)'}
+                                    </button>
+                                </>
                             ) : (
                                 <div className="text-center py-8">
-                                    <svg className="animate-spin h-8 w-8 text-green-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
+                                    <Spinner className="h-8 w-8 text-green-600 mx-auto" />
                                     <p className="mt-3 text-gray-500">Analyzing image...</p>
                                 </div>
                             )}
@@ -742,8 +771,10 @@
             
             const leaderboardListener = useRef(null);
             
-            // *** 修复：将 'isSigningUp' 哨兵从 useState 改为 useRef ***
             const isSigningUp = useRef(false);
+            
+            // *** 新增：计分状态 ***
+            const [scoreAdded, setScoreAdded] = useState(false);
 
             // --- Firebase 效果钩子 ---
 
@@ -783,7 +814,6 @@
             }, []); 
 
             // 2. 监听认证状态 (依赖 firebaseReady)
-            // *** 修改：这是我们的新逻辑，修复了 N/A 问题 ***
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -829,7 +859,6 @@
                                 console.error("Error listening to leaderboard:", error);
                             });
 
-                            // *** 修复：使用 ref 检查哨兵 ***
                             if (!isSigningUp.current) {
                                 setCurrentPage('home'); 
                             }
@@ -855,10 +884,7 @@
                         leaderboardListener.current(); 
                     }
                 };
-            }, [firebaseReady]); // *** 依赖已修复，移除了 isSigningUp ***
-
-            // 3. 监听排行榜数据 (useEffect 已被合并到上面)
-
+            }, [firebaseReady]); 
 
             // --- 认证处理函数 ---
             const handleAuthAction = async (e) => {
@@ -874,7 +900,6 @@
                 setIsAuthActionLoading(true);
 
                 if (isLoginView) {
-                    // *** 登录逻辑 (修复了加载动画) ***
                     try {
                         console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
@@ -885,14 +910,12 @@
                         setIsAuthActionLoading(false); 
                     }
                 } else {
-                    // *** 注册逻辑 ***
                     if (!username) {
                         setAuthError('Please enter a username');
                         setIsAuthActionLoading(false); 
                         return;
                     }
                     
-                    // *** 修复：设置 ref 哨兵 ***
                     isSigningUp.current = true;
                     
                     try {
@@ -924,7 +947,6 @@
                         setAuthError(getFriendlyErrorMessage(error));
                     } finally {
                         setIsAuthActionLoading(false); 
-                        // *** 修复：清除 ref 哨兵 ***
                         isSigningUp.current = false; 
                     }
                 }
@@ -971,9 +993,34 @@
 
 
             // --- 图像处理函数 ---
+            
+            // *** 新增：手动添加分数函数 ***
+            const handleAddScore = async () => {
+                const currentUser = window.firebase.auth.currentUser;
+                if (!firebaseReady || !currentUser || scoreAdded) return;
+
+                // 立即设置，防止重复点击
+                setScoreAdded(true);
+                
+                try {
+                    const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid); 
+                    await window.firebase.updateDoc(userDocRef, {
+                        score: window.firebase.increment(10), 
+                        items: window.firebase.increment(1)
+                    });
+                    console.log("Score updated for:", currentUser.uid);
+                } catch (updateError) {
+                    console.error("Failed to update score:", updateError);
+                    setScoreAdded(false); // 如果失败，允许重试
+                }
+            };
+            
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
+                    // *** 新增：重置计分状态 ***
+                    setScoreAdded(false);
+                    
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         setScannedImage(reader.result);
@@ -1033,19 +1080,8 @@
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
                         
-                        const currentUser = window.firebase.auth.currentUser;
-                        if (result.recyclable && currentUser && firebaseReady) { 
-                            try {
-                                const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid); 
-                                await window.firebase.updateDoc(userDocRef, {
-                                    score: window.firebase.increment(10), 
-                                    items: window.firebase.increment(1)
-                                });
-                                console.log("Score updated for:", currentUser.uid);
-                            } catch (updateError) {
-                                console.error("Failed to update score:", updateError);
-                            }
-                        }
+                        // *** 移除自动计分逻辑 ***
+                        
                     } else {
                         throw new Error('Invalid response format from Gemini');
                     }
@@ -1063,18 +1099,8 @@
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
                         
-                        const currentUser = window.firebase.auth.currentUser;
-                        if (mockResult.recyclable && currentUser && firebaseReady) {
-                            const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid);
-                            try {
-                                await window.firebase.updateDoc(userDocRef, {
-                                    score: window.firebase.increment(10),
-                                    items: window.firebase.increment(1)
-                                });
-                            } catch (err) {
-                                console.error("Demo score update failed", err)
-                            }
-                        }
+                        // *** 移除自动计分逻辑 ***
+                        
                     }, 1000);
                 }
             };
@@ -1133,6 +1159,9 @@
                             handleImageUpload={handleImageUpload}
                             scannedImage={scannedImage}
                             scanResult={scanResult}
+                            // *** 传递新 Props ***
+                            handleAddScore={handleAddScore}
+                            scoreAdded={scoreAdded}
                         />}
                     
                     {currentPage === 'information' && user && 
