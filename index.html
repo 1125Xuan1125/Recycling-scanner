@@ -90,7 +90,6 @@
         const { useState, useRef, useEffect } = React;
 
         // Gemini API Configuration
-        // *** 修复了 'generativelen' 拼写错误 ***
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
@@ -740,6 +739,9 @@
             const [isLoginView, setIsLoginView] = useState(true);
             
             const [signupSuccess, setSignupSuccess] = useState(false);
+            
+            // *** 新增：用于清理监听器 ***
+            const leaderboardListener = useRef(null);
 
             // --- Firebase 效果钩子 ---
 
@@ -784,6 +786,13 @@
                 if (!firebaseReady) return; 
 
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
+                    
+                    // *** 修复：在改变用户之前，先清理旧的 leaderboard 监听器 ***
+                    if (leaderboardListener.current) {
+                        leaderboardListener.current(); // 调用 unsubscribe
+                        leaderboardListener.current = null;
+                    }
+                    
                     try {
                         if (authUser) {
                             console.log("Auth listener: User is already logged in.", authUser.uid);
@@ -795,24 +804,38 @@
                                 console.log("User doc found.");
                                 setUserProfile(userDocSnap.data());
                             } else {
-                                // *** 修复：如果文档不存在，则创建它 ***
-                                console.warn("User doc not found! Creating one...");
-                                const newProfile = {
-                                    uid: authUser.uid,
-                                    email: authUser.email,
-                                    username: authUser.email.split('@')[0], // 使用 email 前缀作为默认用户名
-                                    score: 0,
-                                    items: 0,
-                                    joinedAt: new Date()
-                                };
-                                await window.firebase.setDoc(userDocRef, newProfile);
-                                setUserProfile(newProfile); // 设置新创建的 profile
+                                // *** 修复：不再自动创建 profile ***
+                                console.warn("User doc not found! This might be due to Firestore rules.");
+                                setUserProfile(null); // 设置为 null
                             }
+                            
+                            // *** 修复：在这里启动 Leaderboard 监听器 ***
+                            const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
+                            const q = window.firebase.query(usersCollectionRef);
+                            leaderboardListener.current = window.firebase.onSnapshot(q, (snapshot) => {
+                                const usersData = snapshot.docs.map(doc => ({
+                                    id: doc.id,
+                                    ...doc.data()
+                                }));
+                                usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
+                                
+                                const formattedLeaderboard = usersData.map(user => ({
+                                    name: user.username ? user.username : (user.email ? user.email.split('@')[0] : '...'), 
+                                    score: user.score || 0,
+                                    items: user.items || 0,
+                                    id: user.id
+                                }));
+                                setLeaderboard(formattedLeaderboard.slice(0, 5));
+                            }, (error) => {
+                                console.error("Error listening to leaderboard:", error);
+                            });
+
                             setCurrentPage('home'); 
                         } else {
                             console.log("Auth listener: User is not logged in.");
                             setUser(null);
                             setUserProfile(null);
+                            setLeaderboard([]); // 清空排行榜
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
@@ -823,37 +846,17 @@
                         setIsAuthLoading(false); 
                     }
                 });
-                return () => unsubscribe();
+                
+                // 返回一个函数来清理 auth 监听器
+                return () => {
+                    unsubscribe();
+                    if (leaderboardListener.current) {
+                        leaderboardListener.current(); // 确保组件卸载时也清理
+                    }
+                };
             }, [firebaseReady]); // *** 依赖已修复，只依赖 firebaseReady ***
 
-            // 3. 监听排行榜数据 (依赖 firebaseReady)
-            useEffect(() => {
-                if (!firebaseReady) return; 
-
-                const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
-                const q = window.firebase.query(usersCollectionRef);
-
-                const unsubscribe = window.firebase.onSnapshot(q, (snapshot) => {
-                    const usersData = snapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data()
-                    }));
-                    usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
-                    
-                    const formattedLeaderboard = usersData.map(user => ({
-                        // *** 修复 N/A 问题的逻辑 ***
-                        name: user.username ? user.username : (user.email ? user.email.split('@')[0] : '...'), 
-                        score: user.score || 0,
-                        items: user.items || 0,
-                        id: user.id
-                    }));
-                    setLeaderboard(formattedLeaderboard.slice(0, 5));
-                }, (error) => {
-                    console.error("Error listening to leaderboard:", error);
-                });
-
-                return () => unsubscribe(); 
-            }, [firebaseReady]);
+            // 3. 监听排行榜数据 (useEffect 已被合并到上面)
 
 
             // --- 认证处理函数 ---
@@ -870,17 +873,17 @@
                 setIsAuthActionLoading(true);
 
                 if (isLoginView) {
-                    // *** 登录逻辑 ***
+                    // *** 登录逻辑 (修复了加载动画) ***
                     try {
                         console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
                         console.log("Login successful");
                         // onAuthStateChanged 会自动处理导航
+                        // *** 修复：成功时，isAuthLoading 会变 true，所以我们不需要手动停止按钮加载 ***
                     } catch (error) {
                         console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
-                    } finally {
-                        setIsAuthActionLoading(false); 
+                        setIsAuthActionLoading(false); // *** 只在失败时停止按钮加载 ***
                     }
                 } else {
                     // *** 注册逻辑 ***
@@ -917,7 +920,7 @@
                         console.error("Sign up failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     } finally {
-                        setIsAuthActionLoading(false); 
+                        setIsAuthActionLoading(false); // *** 注册总是在 finally 中停止加载 ***
                     }
                 }
             };
