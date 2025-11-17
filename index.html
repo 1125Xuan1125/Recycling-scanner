@@ -45,6 +45,7 @@
 
       const app = initializeApp(firebaseConfig);
       
+      // 将所有需要的函数附加到 window.firebase
       window.firebase = {
         app,
         auth: getAuth(app),
@@ -63,12 +64,8 @@
         increment
       };
 
-      // 使用 setTimeout 派发事件以确保 React 准备就绪
+      // *** 修改：移除了 dispatchEvent ***
       console.log("Firebase module script loaded and initialized.");
-      setTimeout(() => {
-        window.dispatchEvent(new Event('firebase-ready'));
-        console.log("Dispatched firebase-ready event.");
-      }, 0);
     </script>
     
     <style>
@@ -88,7 +85,7 @@
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-        // --- Icon components ---
+        // --- Icon components (保持不变) ---
         const Camera = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -163,7 +160,7 @@
             ]
         };
         
-        // --- 页面组件 (移到外部) ---
+        // --- 页面组件 (移到外部, 保持不变) ---
         
         const LoadingPage = () => (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -278,11 +275,11 @@
         const ProfileModal = ({ user, userProfile, handleLogout, setProfileOpen }) => (
             <div 
                 className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
-                onClick={() => setProfileOpen(false)} // 点击背景关闭
+                onClick={() => setProfileOpen(false)} 
             >
                 <div 
                     className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full relative"
-                    onClick={(e) => e.stopPropagation()} // 阻止点击模态框内部时关闭
+                    onClick={(e) => e.stopPropagation()} 
                 >
                     <button 
                         onClick={() => setProfileOpen(false)}
@@ -370,6 +367,7 @@
                 )}
 
                 <div className="p-6 max-w-4xl mx-auto">
+                    {/* ... (排行榜和扫描部分保持不变) ... */}
                     <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
                         <div className="flex items-center gap-3 mb-4">
                             <Trophy className="w-8 h-8 text-yellow-500" />
@@ -530,6 +528,7 @@
                         </button>
                     </div>
                 )}
+                {/* ... (信息页面内容保持不变) ... */}
                 <div className="p-6 max-w-4xl mx-auto">
                     <div className="mb-8">
                         <h2 className="text-3xl font-bold text-green-600 mb-2">♻️ Recyclable Items</h2>
@@ -624,6 +623,7 @@
                         </button>
                     </div>
                 )}
+                {/* ... (反馈页面内容保持不变) ... */}
                 <div className="p-6 max-w-2xl mx-auto">
                     <div className="bg-white rounded-xl shadow-lg p-8">
                         <div className="flex items-center gap-3 mb-6">
@@ -695,24 +695,38 @@
 
             // --- Firebase 效果钩子 ---
 
-            // 1. 监听 'firebase-ready' 事件
+            // *** 修改：使用轮询 (Polling) 代替事件 ***
             useEffect(() => {
-                const onFirebaseReady = () => {
-                    setFirebaseReady(true);
-                };
-                if (window.firebase) {
-                    onFirebaseReady();
-                } else {
-                    window.addEventListener('firebase-ready', onFirebaseReady);
-                }
+                // 轮询 window.firebase
+                const intervalId = setInterval(() => {
+                    if (window.firebase) {
+                        console.log("Firebase is ready.");
+                        setFirebaseReady(true);
+                        clearInterval(intervalId); // 找到后停止轮询
+                    } else {
+                        console.log("Waiting for firebase...");
+                    }
+                }, 100); // 每 100ms 检查一次
+
+                // 设置一个 10 秒的超时，以防万一
+                const timeoutId = setTimeout(() => {
+                    clearInterval(intervalId);
+                    if (!window.firebase) {
+                        console.error("Firebase failed to load after 10 seconds.");
+                        // 也许在这里设置一个全局错误状态
+                    }
+                }, 10000); 
+
+                // 清理函数
                 return () => {
-                    window.removeEventListener('firebase-ready', onFirebaseReady);
+                    clearInterval(intervalId);
+                    clearTimeout(timeoutId);
                 };
-            }, []);
+            }, []); // [] 确保只在组件挂载时运行一次
 
             // 2. 监听认证状态 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) return; 
+                if (!firebaseReady) return; // 等待 firebase 准备就绪
 
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
                     if (authUser) {
@@ -726,6 +740,7 @@
                     } else {
                         setUser(null);
                         setUserProfile(null);
+                        // 只有当用户不在欢迎页或登录页时才强制跳转到登录
                         if (currentPage !== 'welcome' && currentPage !== 'login') {
                             setCurrentPage('login');
                         }
@@ -733,11 +748,11 @@
                     setIsAuthLoading(false); 
                 });
                 return () => unsubscribe();
-            }, [firebaseReady, currentPage]);
+            }, [firebaseReady, currentPage]); // 依赖 firebaseReady 和 currentPage
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) return; 
+                if (!firebaseReady) return; // 等待 firebase 准备就绪
 
                 const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
                 const q = window.firebase.query(usersCollectionRef);
@@ -747,7 +762,9 @@
                         id: doc.id,
                         ...doc.data()
                     }));
+                    // 在客户端排序
                     usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
+                    
                     const formattedLeaderboard = usersData.map(user => ({
                         name: user.username || user.email, 
                         score: user.score || 0,
@@ -772,13 +789,15 @@
                 }
 
                 if (isLoginView) {
+                    // 登录
                     try {
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
+                        // onAuthStateChanged 会处理页面跳转
                     } catch (error) {
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 } else {
-                    // *** 修改：使用英语提示 ***
+                    // 注册
                     if (!username) {
                         setAuthError('Please enter a username');
                         return;
@@ -786,6 +805,7 @@
                     try {
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
                         const user = userCredential.user;
+                        // 创建用户 Firestore 文档
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
@@ -794,13 +814,14 @@
                             items: 0,
                             joinedAt: new Date()
                         });
+                        // onAuthStateChanged 会处理页面跳转
                     } catch (error) {
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 }
             };
             
-            // *** 修改：使用英语提示 ***
+            // 英语错误提示
             const getFriendlyErrorMessage = (error) => {
                 switch(error.code) {
                     case 'auth/invalid-email':
@@ -817,7 +838,7 @@
                     case 'auth/configuration-not-found':
                          return 'Firebase configuration not found. Please refresh.';
                     default:
-                        return error.message; // Default to the raw Firebase error
+                        return error.message; 
                 }
             };
             
@@ -898,6 +919,7 @@
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
                         
+                        // 更新分数
                         if (result.recyclable && user && firebaseReady) {
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
                             await window.firebase.updateDoc(userDocRef, {
@@ -910,7 +932,7 @@
                     }
                 } catch (error) {
                     console.error('Error analyzing image:', error);
-                    // Fallback
+                    // 演示/回退逻辑
                     setTimeout(async () => {
                         const results = [
                             { type: 'Plastic Bottle', recyclable: true, category: 'Plastic (#1)', confidence: 94 },
@@ -922,6 +944,7 @@
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
 
+                        // 演示分数更新
                         if (mockResult.recyclable && user && firebaseReady) {
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
                             try {
@@ -949,10 +972,12 @@
 
             // --- 页面路由逻辑 ---
             
+            // Loading 页面现在只在 firebase 未就绪 或 认证状态加载中 时显示
             if (!firebaseReady || isAuthLoading) {
                 return <LoadingPage />;
             }
             
+            // 根据 currentPage 渲染
             return (
                 <>
                     {currentPage === 'welcome' && <WelcomePage setCurrentPage={setCurrentPage} />}
@@ -1009,6 +1034,7 @@
                             feedbackSubmitted={feedbackSubmitted}
                         />}
                     
+                    {/* 个人资料模态框 (全局渲染) */}
                     {profileOpen && user && (
                         <ProfileModal 
                             user={user}
