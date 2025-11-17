@@ -14,6 +14,7 @@
     
     <!-- Firebase v10.12.4 -->
     <script type="module">
+      // *** 修改：将 imports 移到顶层，在 try...catch 之外 ***
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
       import { 
         getAuth, 
@@ -34,38 +35,45 @@
         increment
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
-      const firebaseConfig = {
-        apiKey: "AIzaSyDDtDFM7Xa5LTk0pZ13sd__9j_HvmV9K4o",
-        authDomain: "recycling-scanner-web.firebaseapp.com",
-        projectId: "recycling-scanner-web",
-        storageBucket: "recycling-scanner-web.firebasestorage.app",
-        messagingSenderId: "470256374118",
-        appId: "1:470256374118:web:3a705fdaf4b6c6f66cf8a7"
-      };
+      try {
+        // try...catch 块现在只包裹执行代码
+        const firebaseConfig = {
+          apiKey: "AIzaSyDDtDFM7Xa5LTk0pZ13sd__9j_HvmV9K4o",
+          authDomain: "recycling-scanner-web.firebaseapp.com",
+          projectId: "recycling-scanner-web",
+          storageBucket: "recycling-scanner-web.firebasestorage.app",
+          messagingSenderId: "470256374118",
+          appId: "1:470256374118:web:3a705fdaf4b6c6f66cf8a7"
+        };
 
-      const app = initializeApp(firebaseConfig);
-      
-      // 将所有需要的函数附加到 window.firebase
-      window.firebase = {
-        app,
-        auth: getAuth(app),
-        db: getFirestore(app),
-        onAuthStateChanged,
-        createUserWithEmailAndPassword,
-        signInWithEmailAndPassword,
-        signOut,
-        doc,
-        setDoc,
-        getDoc,
-        collection,
-        onSnapshot,
-        query,
-        updateDoc,
-        increment
-      };
+        const app = initializeApp(firebaseConfig);
+        
+        // 将所有需要的函数附加到 window.firebase
+        window.firebase = {
+          app,
+          auth: getAuth(app),
+          db: getFirestore(app),
+          onAuthStateChanged,
+          createUserWithEmailAndPassword,
+          signInWithEmailAndPassword,
+          signOut,
+          doc,
+          setDoc,
+          getDoc,
+          collection,
+          onSnapshot,
+          query,
+          updateDoc,
+          increment
+        };
+        
+        console.log("Firebase module script loaded and initialized.");
 
-      // *** 修改：移除了 dispatchEvent ***
-      console.log("Firebase module script loaded and initialized.");
+      } catch (error) {
+        // 如果初始化失败，设置错误标志
+        console.error("CRITICAL FIREBASE MODULE ERROR:", error);
+        window.firebaseError = error.message; 
+      }
     </script>
     
     <style>
@@ -160,7 +168,7 @@
             ]
         };
         
-        // --- 页面组件 (移到外部, 保持不变) ---
+        // --- 页面组件 (移到外部) ---
         
         const LoadingPage = () => (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center">
@@ -170,6 +178,19 @@
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     <p className="text-lg text-gray-700">Loading...</p>
+                </div>
+            </div>
+        );
+
+        const CriticalErrorPage = ({ message }) => (
+            <div className="min-h-screen bg-red-100 flex items-center justify-center p-6">
+                <div className="bg-white rounded-lg shadow-xl p-8 max-w-lg w-full">
+                    <h2 className="text-2xl font-bold text-red-700 mb-4">A Critical Error Occurred</h2>
+                    <p className="text-gray-700 mb-2">The application could not start. This is often due to a Firebase configuration issue or a network problem.</p>
+                    <p className="text-gray-500 text-sm mb-4">Please ensure you are connected to the internet, that ad-blockers are disabled, and that the Firebase configuration is correct.</p>
+                    <div className="bg-gray-100 p-4 rounded text-red-800 font-mono text-sm overflow-x-auto">
+                        <strong>Error:</strong> {message || "Unknown Error"}
+                    </div>
                 </div>
             </div>
         );
@@ -685,6 +706,9 @@
             const [firebaseReady, setFirebaseReady] = useState(false); 
             const [isAuthLoading, setIsAuthLoading] = useState(true); 
             
+            // *** 新增：严重错误状态 ***
+            const [criticalError, setCriticalError] = useState(null);
+            
             const [profileOpen, setProfileOpen] = useState(false);
             
             const [authError, setAuthError] = useState('');
@@ -695,29 +719,40 @@
 
             // --- Firebase 效果钩子 ---
 
-            // *** 修改：使用轮询 (Polling) 代替事件 ***
+            // *** 修改：轮询 (Polling) 增加错误检查 ***
             useEffect(() => {
-                // 轮询 window.firebase
                 const intervalId = setInterval(() => {
+                    // 1. 检查成功
                     if (window.firebase) {
                         console.log("Firebase is ready.");
                         setFirebaseReady(true);
-                        clearInterval(intervalId); // 找到后停止轮询
-                    } else {
-                        console.log("Waiting for firebase...");
+                        clearInterval(intervalId);
+                        return; // 停止
                     }
+                    
+                    // 2. 检查失败
+                    if (window.firebaseError) {
+                        console.error("Firebase critical error detected:", window.firebaseError);
+                        setCriticalError(window.firebaseError); // 设置错误状态
+                        setFirebaseReady(false); // 确保为 false
+                        setIsAuthLoading(false); // 停止认证加载
+                        clearInterval(intervalId); // 停止轮询
+                        return; // 停止
+                    }
+
+                    console.log("Waiting for firebase...");
                 }, 100); // 每 100ms 检查一次
 
-                // 设置一个 10 秒的超时，以防万一
+                // 10 秒超时
                 const timeoutId = setTimeout(() => {
                     clearInterval(intervalId);
-                    if (!window.firebase) {
-                        console.error("Firebase failed to load after 10 seconds.");
-                        // 也许在这里设置一个全局错误状态
+                    if (!window.firebase && !window.firebaseError) {
+                        console.error("Firebase failed to load after 10 seconds (Timeout).");
+                        setCriticalError("Firebase failed to load (Timeout). Check network or ad-blockers.");
+                        setIsAuthLoading(false);
                     }
                 }, 10000); 
 
-                // 清理函数
                 return () => {
                     clearInterval(intervalId);
                     clearTimeout(timeoutId);
@@ -726,7 +761,7 @@
 
             // 2. 监听认证状态 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) return; // 等待 firebase 准备就绪
+                if (!firebaseReady) return; // 只有在 firebase 成功时才运行
 
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
                     if (authUser) {
@@ -740,7 +775,6 @@
                     } else {
                         setUser(null);
                         setUserProfile(null);
-                        // 只有当用户不在欢迎页或登录页时才强制跳转到登录
                         if (currentPage !== 'welcome' && currentPage !== 'login') {
                             setCurrentPage('login');
                         }
@@ -748,11 +782,11 @@
                     setIsAuthLoading(false); 
                 });
                 return () => unsubscribe();
-            }, [firebaseReady, currentPage]); // 依赖 firebaseReady 和 currentPage
+            }, [firebaseReady, currentPage]);
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) return; // 等待 firebase 准备就绪
+                if (!firebaseReady) return; // 只有在 firebase 成功时才运行
 
                 const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
                 const q = window.firebase.query(usersCollectionRef);
@@ -762,7 +796,6 @@
                         id: doc.id,
                         ...doc.data()
                     }));
-                    // 在客户端排序
                     usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
                     
                     const formattedLeaderboard = usersData.map(user => ({
@@ -789,15 +822,12 @@
                 }
 
                 if (isLoginView) {
-                    // 登录
                     try {
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
-                        // onAuthStateChanged 会处理页面跳转
                     } catch (error) {
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 } else {
-                    // 注册
                     if (!username) {
                         setAuthError('Please enter a username');
                         return;
@@ -805,7 +835,6 @@
                     try {
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
                         const user = userCredential.user;
-                        // 创建用户 Firestore 文档
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
@@ -814,14 +843,12 @@
                             items: 0,
                             joinedAt: new Date()
                         });
-                        // onAuthStateChanged 会处理页面跳转
                     } catch (error) {
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 }
             };
             
-            // 英语错误提示
             const getFriendlyErrorMessage = (error) => {
                 switch(error.code) {
                     case 'auth/invalid-email':
@@ -919,7 +946,6 @@
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
                         
-                        // 更新分数
                         if (result.recyclable && user && firebaseReady) {
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
                             await window.firebase.updateDoc(userDocRef, {
@@ -932,7 +958,7 @@
                     }
                 } catch (error) {
                     console.error('Error analyzing image:', error);
-                    // 演示/回退逻辑
+                    // Fallback
                     setTimeout(async () => {
                         const results = [
                             { type: 'Plastic Bottle', recyclable: true, category: 'Plastic (#1)', confidence: 94 },
@@ -944,7 +970,6 @@
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
 
-                        // 演示分数更新
                         if (mockResult.recyclable && user && firebaseReady) {
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
                             try {
@@ -972,7 +997,11 @@
 
             // --- 页面路由逻辑 ---
             
-            // Loading 页面现在只在 firebase 未就绪 或 认证状态加载中 时显示
+            // *** 修改：优先检查严重错误 ***
+            if (criticalError) {
+                return <CriticalErrorPage message={criticalError} />;
+            }
+            
             if (!firebaseReady || isAuthLoading) {
                 return <LoadingPage />;
             }
@@ -1034,7 +1063,6 @@
                             feedbackSubmitted={feedbackSubmitted}
                         />}
                     
-                    {/* 个人资料模态框 (全局渲染) */}
                     {profileOpen && user && (
                         <ProfileModal 
                             user={user}
