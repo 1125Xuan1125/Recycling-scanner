@@ -742,6 +742,9 @@
             
             // *** 新增：用于清理监听器 ***
             const leaderboardListener = useRef(null);
+            
+            // *** 新增：用于修复白屏的“哨兵”状态 ***
+            const [isSigningUp, setIsSigningUp] = useState(false);
 
             // --- Firebase 效果钩子 ---
 
@@ -795,7 +798,7 @@
                     
                     try {
                         if (authUser) {
-                            console.log("Auth listener: User is already logged in.", authUser.uid);
+                            console.log("Auth listener: User is logged in.", authUser.uid);
                             setUser(authUser);
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
@@ -830,7 +833,10 @@
                                 console.error("Error listening to leaderboard:", error);
                             });
 
-                            setCurrentPage('home'); 
+                            // *** 修复：只有在不是“注册中”时才自动导航 ***
+                            if (!isSigningUp) {
+                                setCurrentPage('home'); 
+                            }
                         } else {
                             console.log("Auth listener: User is not logged in.");
                             setUser(null);
@@ -841,7 +847,7 @@
                         console.error("Error during auth state change processing:", error);
                         setUser(authUser); 
                         setUserProfile(null);
-                        if(authUser) setCurrentPage('home');
+                        if(authUser && !isSigningUp) setCurrentPage('home'); // 尽力尝试
                     } finally {
                         setIsAuthLoading(false); 
                     }
@@ -854,7 +860,7 @@
                         leaderboardListener.current(); // 确保组件卸载时也清理
                     }
                 };
-            }, [firebaseReady]); // *** 依赖已修复，只依赖 firebaseReady ***
+            }, [firebaseReady, isSigningUp]); // *** 依赖已修复，添加 isSigningUp ***
 
             // 3. 监听排行榜数据 (useEffect 已被合并到上面)
 
@@ -892,6 +898,10 @@
                         setIsAuthActionLoading(false); 
                         return;
                     }
+                    
+                    // *** 修复：设置“哨兵” ***
+                    setIsSigningUp(true);
+                    
                     try {
                         console.log("Attempting sign up for:", email);
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
@@ -921,6 +931,7 @@
                         setAuthError(getFriendlyErrorMessage(error));
                     } finally {
                         setIsAuthActionLoading(false); // *** 注册总是在 finally 中停止加载 ***
+                        setIsSigningUp(false); // *** 修复：清除“哨兵” ***
                     }
                 }
             };
