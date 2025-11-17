@@ -178,7 +178,7 @@
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    {/* *** 修改：添加了版本号 *** */}
+                    {/* *** 保持 v1.1 用于缓存测试 *** */}
                     <p className="text-lg text-gray-700">Loading... (v1.1)</p>
                 </div>
             </div>
@@ -228,7 +228,7 @@
             isLoginView, setIsLoginView, 
             authError,
             signupSuccess,
-            isAuthActionLoading // *** 新增 ***
+            isAuthActionLoading 
         }) => (
             <div className="min-h-screen bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 flex items-center justify-center p-6">
                 <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
@@ -282,10 +282,9 @@
                             <p className="text-sm text-red-600 text-center">{authError}</p>
                         )}
 
-                        {/* *** 修改：添加加载状态 *** */}
                         <button 
                             type="submit"
-                            disabled={isAuthActionLoading} // 禁用按钮
+                            disabled={isAuthActionLoading} 
                             className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center disabled:bg-gray-400"
                         >
                             {isAuthActionLoading ? (
@@ -337,8 +336,9 @@
                         <p className="text-lg font-medium text-gray-700 break-all">
                             {user?.email}
                         </p>
+                        {/* *** 修改：修复了 N/A 问题 *** */}
                         <p className="text-sm text-gray-500 mb-6">
-                            Username: {userProfile?.username || 'N/A'}
+                            Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
                         </p>
 
                         <button
@@ -726,7 +726,6 @@
             const [firebaseReady, setFirebaseReady] = useState(false); 
             const [isAuthLoading, setIsAuthLoading] = useState(true); // 全局加载 (只在启动时)
             
-            // *** 新增：按钮加载状态 ***
             const [isAuthActionLoading, setIsAuthActionLoading] = useState(false); 
             
             const [criticalError, setCriticalError] = useState(null);
@@ -779,7 +778,7 @@
             }, []); 
 
             // 2. 监听认证状态 (依赖 firebaseReady)
-            // *** 这是来自 'Fix Auth Logic' 版本的正确逻辑 ***
+            // *** 修改：这是我们的新逻辑，修复了 N/A 问题 ***
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -792,18 +791,27 @@
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
                             
                             if (userDocSnap.exists()) {
+                                console.log("User doc found.");
                                 setUserProfile(userDocSnap.data());
                             } else {
-                                console.warn("User doc not found for UID:", authUser.uid);
-                                setUserProfile(null); 
+                                // *** 修复：如果文档不存在，则创建它 ***
+                                console.warn("User doc not found! Creating one...");
+                                const newProfile = {
+                                    uid: authUser.uid,
+                                    email: authUser.email,
+                                    username: authUser.email.split('@')[0], // 使用 email 前缀作为默认用户名
+                                    score: 0,
+                                    items: 0,
+                                    joinedAt: new Date()
+                                };
+                                await window.firebase.setDoc(userDocRef, newProfile);
+                                setUserProfile(newProfile); // 设置新创建的 profile
                             }
                             setCurrentPage('home'); 
                         } else {
                             console.log("Auth listener: User is not logged in.");
                             setUser(null);
                             setUserProfile(null);
-                            // *** 关键：如果用户未登录，我们什么也不做。
-                            // 我们让他们停留在 'welcome' 页面 (默认状态)
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
@@ -855,8 +863,7 @@
                     setAuthError("Firebase is not ready. Please wait.");
                     return;
                 }
-
-                // *** 修改：设置按钮加载状态 ***
+                
                 setIsAuthActionLoading(true);
 
                 if (isLoginView) {
@@ -870,13 +877,13 @@
                         console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     } finally {
-                        setIsAuthActionLoading(false); // *** 结束加载 ***
+                        setIsAuthActionLoading(false); 
                     }
                 } else {
                     // *** 注册逻辑 ***
                     if (!username) {
                         setAuthError('Please enter a username');
-                        setIsAuthActionLoading(false); // *** 结束加载 ***
+                        setIsAuthActionLoading(false); 
                         return;
                     }
                     try {
@@ -907,7 +914,7 @@
                         console.error("Sign up failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     } finally {
-                        setIsAuthActionLoading(false); // *** 结束加载 ***
+                        setIsAuthActionLoading(false); 
                     }
                 }
             };
@@ -942,14 +949,13 @@
                 
                 await window.firebase.signOut(window.firebase.auth);
                 
-                // *** 修改：登出后手动设置状态 ***
                 setEmail('');
                 setPassword('');
                 setUsername('');
                 setAuthError('');
                 setIsLoginView(true);
                 setSignupSuccess(false); 
-                setCurrentPage('login'); // *** 手动导航到登录页 ***
+                setCurrentPage('login'); 
             };
 
 
@@ -1097,7 +1103,7 @@
                             setIsLoginView={setIsLoginView}
                             authError={authError}
                             signupSuccess={signupSuccess} 
-                            isAuthActionLoading={isAuthActionLoading} // *** 传递 ***
+                            isAuthActionLoading={isAuthActionLoading} 
                         />}
                     
                     {currentPage === 'home' && user && 
