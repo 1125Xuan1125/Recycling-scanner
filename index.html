@@ -91,7 +91,7 @@
 
         // Gemini API Configuration
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
-        const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+        const GEMINI_API_URL = 'https://generativelen.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
         // --- Icon components (保持不变) ---
         const Camera = ({ className }) => (
@@ -225,7 +225,8 @@
             username, setUsername, 
             isLoginView, setIsLoginView, 
             authError,
-            signupSuccess // *** 新增 ***
+            signupSuccess,
+            isAuthActionLoading // *** 新增 ***
         }) => (
             <div className="min-h-screen bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 flex items-center justify-center p-6">
                 <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
@@ -270,7 +271,6 @@
                             />
                         </div>
                         
-                        {/* *** 修改：添加注册成功提示 *** */}
                         {signupSuccess && (
                             <p className="text-sm text-green-600 text-center">
                                 Sign up successful! Please log in.
@@ -280,19 +280,28 @@
                             <p className="text-sm text-red-600 text-center">{authError}</p>
                         )}
 
+                        {/* *** 修改：添加加载状态 *** */}
                         <button 
                             type="submit"
-                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition"
+                            disabled={isAuthActionLoading} // 禁用按钮
+                            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition flex items-center justify-center disabled:bg-gray-400"
                         >
-                            {isLoginView ? 'Login' : 'Sign Up'}
+                            {isAuthActionLoading ? (
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            ) : (
+                                isLoginView ? 'Login' : 'Sign Up'
+                            )}
                         </button>
                     </form>
                     
                     <button 
                         onClick={() => {
                             setIsLoginView(!isLoginView);
-                            setAuthError(''); // 切换时清除错误
-                            setSignupSuccess(false); // 切换时清除成功
+                            setAuthError(''); 
+                            setSignupSuccess(false); 
                         }}
                         className="w-full mt-4 text-sm text-green-600 hover:underline"
                     >
@@ -713,7 +722,10 @@
             const [user, setUser] = useState(null); 
             const [userProfile, setUserProfile] = useState(null); 
             const [firebaseReady, setFirebaseReady] = useState(false); 
-            const [isAuthLoading, setIsAuthLoading] = useState(true); 
+            const [isAuthLoading, setIsAuthLoading] = useState(true); // 全局加载 (只在启动时)
+            
+            // *** 新增：按钮加载状态 ***
+            const [isAuthActionLoading, setIsAuthActionLoading] = useState(false); 
             
             const [criticalError, setCriticalError] = useState(null);
             
@@ -725,7 +737,6 @@
             const [username, setUsername] = useState('');
             const [isLoginView, setIsLoginView] = useState(true);
             
-            // *** 新增：注册成功状态 ***
             const [signupSuccess, setSignupSuccess] = useState(false);
 
             // --- Firebase 效果钩子 ---
@@ -766,15 +777,12 @@
             }, []); 
 
             // 2. 监听认证状态 (依赖 firebaseReady)
-            // *** 修改：这是我们的新逻辑 ***
             useEffect(() => {
                 if (!firebaseReady) return; 
 
-                // 这个监听器只在 *应用加载时* 检查你是否 *已经* 登录
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
                     try {
                         if (authUser) {
-                            // 1. 用户已登录
                             console.log("Auth listener: User is already logged in.", authUser.uid);
                             setUser(authUser);
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
@@ -786,27 +794,23 @@
                                 console.warn("User doc not found for UID:", authUser.uid);
                                 setUserProfile(null); 
                             }
-                            setCurrentPage('home'); // 自动导航到主页
+                            setCurrentPage('home'); 
                         } else {
-                            // 2. 用户未登录
                             console.log("Auth listener: User is not logged in.");
                             setUser(null);
                             setUserProfile(null);
-                            // *** 关键：如果用户未登录，我们什么也不做。
-                            // 我们让他们停留在 'welcome' 页面 (默认状态)
-                            // setCurrentPage('login'); // <-- 移除这一行
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
                         setUser(authUser); 
                         setUserProfile(null);
-                        if(authUser) setCurrentPage('home'); // 尽力尝试
+                        if(authUser) setCurrentPage('home');
                     } finally {
-                        setIsAuthLoading(false); // 无论如何都结束 loading
+                        setIsAuthLoading(false); 
                     }
                 });
                 return () => unsubscribe();
-            }, [firebaseReady]); // *** 依赖已修复，只依赖 firebaseReady ***
+            }, [firebaseReady]); 
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
@@ -840,12 +844,15 @@
             const handleAuthAction = async (e) => {
                 e.preventDefault();
                 setAuthError(''); 
-                setSignupSuccess(false); // *** 新增：每次点击都清除旧消息 ***
+                setSignupSuccess(false); 
                 
                 if (!firebaseReady) {
                     setAuthError("Firebase is not ready. Please wait.");
                     return;
                 }
+
+                // *** 修改：设置按钮加载状态 ***
+                setIsAuthActionLoading(true);
 
                 if (isLoginView) {
                     // *** 登录逻辑 ***
@@ -853,17 +860,18 @@
                         console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
                         console.log("Login successful");
-                        // 登录成功！
-                        // onAuthStateChanged 监听器会 *自动* 发现变化
-                        // 并处理导航到 'home'
+                        // onAuthStateChanged 会自动处理导航
                     } catch (error) {
                         console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
+                    } finally {
+                        setIsAuthActionLoading(false); // *** 结束加载 ***
                     }
                 } else {
                     // *** 注册逻辑 ***
                     if (!username) {
                         setAuthError('Please enter a username');
+                        setIsAuthActionLoading(false); // *** 结束加载 ***
                         return;
                     }
                     try {
@@ -882,18 +890,19 @@
                         });
                         console.log("User doc created.");
 
-                        // *** 修改：注册成功后登出，并显示提示 ***
-                        await window.firebase.signOut(window.firebase.auth); // 立即登出
+                        await window.firebase.signOut(window.firebase.auth); 
                         console.log("User signed out, showing success message.");
-                        setSignupSuccess(true);  // 显示成功消息
-                        setIsLoginView(true);     // 切换到登录视图
-                        setEmail('');             // 清空字段
+                        setSignupSuccess(true);  
+                        setIsLoginView(true);     
+                        setEmail('');             
                         setPassword('');
                         setUsername('');
                         
                     } catch (error) {
                         console.error("Sign up failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
+                    } finally {
+                        setIsAuthActionLoading(false); // *** 结束加载 ***
                     }
                 }
             };
@@ -928,14 +937,13 @@
                 
                 await window.firebase.signOut(window.firebase.auth);
                 
-                // *** 修改：登出后手动设置状态 ***
                 setEmail('');
                 setPassword('');
                 setUsername('');
                 setAuthError('');
                 setIsLoginView(true);
                 setSignupSuccess(false); 
-                setCurrentPage('login'); // *** 手动导航到登录页 ***
+                setCurrentPage('login'); 
             };
 
 
@@ -1061,7 +1069,7 @@
                 return <CriticalErrorPage message={criticalError} />;
             }
             
-            if (isAuthLoading) { 
+            if (isAuthLoading) { // (只在启动时)
                 return <LoadingPage />;
             }
             
@@ -1082,7 +1090,8 @@
                             isLoginView={isLoginView}
                             setIsLoginView={setIsLoginView}
                             authError={authError}
-                            signupSuccess={signupSuccess} // *** 传递 ***
+                            signupSuccess={signupSuccess} 
+                            isAuthActionLoading={isAuthActionLoading} // *** 传递 ***
                         />}
                     
                     {currentPage === 'home' && user && 
