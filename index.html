@@ -14,7 +14,7 @@
     
     <!-- Firebase v10.12.4 -->
     <script type="module">
-      // *** 修改：将 imports 移到顶层，在 try...catch 之外 ***
+      // *** 将 imports 移到顶层，在 try...catch 之外 ***
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
       import { 
         getAuth, 
@@ -706,7 +706,6 @@
             const [firebaseReady, setFirebaseReady] = useState(false); 
             const [isAuthLoading, setIsAuthLoading] = useState(true); 
             
-            // *** 新增：严重错误状态 ***
             const [criticalError, setCriticalError] = useState(null);
             
             const [profileOpen, setProfileOpen] = useState(false);
@@ -719,7 +718,7 @@
 
             // --- Firebase 效果钩子 ---
 
-            // *** 修改：轮询 (Polling) 增加错误检查 ***
+            // 1. 轮询 (Polling) 增加错误检查
             useEffect(() => {
                 const intervalId = setInterval(() => {
                     // 1. 检查成功
@@ -760,33 +759,51 @@
             }, []); // [] 确保只在组件挂载时运行一次
 
             // 2. 监听认证状态 (依赖 firebaseReady)
+            // *** 修改：添加了 try...catch...finally ***
             useEffect(() => {
-                if (!firebaseReady) return; // 只有在 firebase 成功时才运行
+                if (!firebaseReady) return; 
 
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
-                    if (authUser) {
-                        setUser(authUser);
-                        const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
-                        const userDocSnap = await window.firebase.getDoc(userDocRef);
-                        if (userDocSnap.exists()) {
-                            setUserProfile(userDocSnap.data());
-                        } 
-                        setCurrentPage('home'); 
-                    } else {
-                        setUser(null);
-                        setUserProfile(null);
-                        if (currentPage !== 'welcome' && currentPage !== 'login') {
-                            setCurrentPage('login');
+                    try {
+                        if (authUser) {
+                            setUser(authUser);
+                            // 尝试获取用户文档
+                            const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
+                            const userDocSnap = await window.firebase.getDoc(userDocRef);
+                            
+                            if (userDocSnap.exists()) {
+                                setUserProfile(userDocSnap.data());
+                            } else {
+                                console.warn("User doc not found for UID:", authUser.uid);
+                                setUserProfile(null); // 确保重置
+                            }
+                            setCurrentPage('home'); 
+                        } else {
+                            // 用户未登录
+                            setUser(null);
+                            setUserProfile(null);
+                            if (currentPage !== 'welcome' && currentPage !== 'login') {
+                                setCurrentPage('login');
+                            }
                         }
+                    } catch (error) {
+                        // 捕获 getDoc 失败等错误
+                        console.error("Error during auth state change processing:", error);
+                        // 即使出错，也要让用户知道
+                        setUser(authUser); // 可能只有 authUser，没有 profile
+                        setUserProfile(null); // 无法获取 profile
+                        if(authUser) setCurrentPage('home'); // 至少让他们进主页
+                    } finally {
+                        // *** 关键：无论成功与否，都必须设置 loading 结束 ***
+                        setIsAuthLoading(false); 
                     }
-                    setIsAuthLoading(false); 
                 });
                 return () => unsubscribe();
-            }, [firebaseReady, currentPage]);
+            }, [firebaseReady, currentPage]); // 保持 currentPage 依赖
 
             // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) return; // 只有在 firebase 成功时才运行
+                if (!firebaseReady) return; 
 
                 const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
                 const q = window.firebase.query(usersCollectionRef);
@@ -823,8 +840,13 @@
 
                 if (isLoginView) {
                     try {
+                        // ** 调试：打印登录尝试 **
+                        console.log("Attempting login for:", email);
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
+                        console.log("Login successful");
+                        // 状态变更将由 onAuthStateChanged 处理
                     } catch (error) {
+                        console.error("Login failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 } else {
@@ -833,8 +855,12 @@
                         return;
                     }
                     try {
+                        // ** 调试：打印注册尝试 **
+                        console.log("Attempting sign up for:", email);
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
                         const user = userCredential.user;
+                        console.log("Sign up successful, creating user doc...");
+                        
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
@@ -843,12 +869,16 @@
                             items: 0,
                             joinedAt: new Date()
                         });
+                        console.log("User doc created.");
+                        // 状态变更将由 onAuthStateChanged 处理
                     } catch (error) {
+                        console.error("Sign up failed:", error.code);
                         setAuthError(getFriendlyErrorMessage(error));
                     }
                 }
             };
             
+            // *** 修改：更新了 auth/invalid-credential 的提示 ***
             const getFriendlyErrorMessage = (error) => {
                 switch(error.code) {
                     case 'auth/invalid-email':
@@ -856,6 +886,8 @@
                     case 'auth/user-not-found':
                     case 'auth/wrong-password':
                         return 'Incorrect email or password';
+                    case 'auth/invalid-credential':
+                         return 'Account not found or password incorrect. Please sign up if you don\'t have an account.';
                     case 'auth/email-already-in-use':
                         return 'This email is already in use';
                     case 'auth/weak-password':
@@ -945,13 +977,17 @@
                     if (jsonMatch) {
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
-                        
+
                         if (result.recyclable && user && firebaseReady) {
-                            const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
-                            await window.firebase.updateDoc(userDocRef, {
-                                score: window.firebase.increment(10), 
-                                items: window.firebase.increment(1)
-                            });
+                            try {
+                                const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
+                                await window.firebase.updateDoc(userDocRef, {
+                                    score: window.firebase.increment(10), 
+                                    items: window.firebase.increment(1)
+                                });
+                            } catch (updateError) {
+                                console.error("Failed to update score:", updateError);
+                            }
                         }
                     } else {
                         throw new Error('Invalid response format from Gemini');
@@ -997,12 +1033,11 @@
 
             // --- 页面路由逻辑 ---
             
-            // *** 修改：优先检查严重错误 ***
             if (criticalError) {
                 return <CriticalErrorPage message={criticalError} />;
             }
             
-            if (!firebaseReady || isAuthLoading) {
+            if (isAuthLoading) { // *** 修改：现在只检查 isAuthLoading ***
                 return <LoadingPage />;
             }
             
