@@ -45,7 +45,6 @@
 
       const app = initializeApp(firebaseConfig);
       
-      // 将所有需要的东西附加到 window.firebase
       window.firebase = {
         app,
         auth: getAuth(app),
@@ -64,9 +63,8 @@
         increment
       };
 
-      // *** 恢复：分派自定义事件 ***
+      // 使用 setTimeout 派发事件以确保 React 准备就绪
       console.log("Firebase module script loaded and initialized.");
-      // *** 修改：使用 setTimeout(..., 0) 来确保事件在 React 监听后才派发 ***
       setTimeout(() => {
         window.dispatchEvent(new Event('firebase-ready'));
         console.log("Dispatched firebase-ready event.");
@@ -86,14 +84,11 @@
     <script type="text/babel">
         const { useState, useRef, useEffect } = React;
 
-        // *** 移除：不再在顶部解构 ***
-        // const { auth, db, ... } = window.firebase;
-
         // Gemini API Configuration
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-        // --- Icon components (保持不变) ---
+        // --- Icon components ---
         const Camera = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -143,6 +138,12 @@
         const LogOut = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+        );
+        
+        const UserCircle = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         );
         // --- End Icon Components ---
@@ -219,7 +220,7 @@
                     <form onSubmit={handleAuthAction} className="space-y-4">
                         {!isLoginView && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">用户名 (Username)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
                                 <input 
                                     type="text" 
                                     value={username}
@@ -230,7 +231,7 @@
                             </div>
                         )}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">邮箱 (Email)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                             <input 
                                 type="email" 
                                 value={email}
@@ -240,7 +241,7 @@
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">密码 (Password)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                             <input 
                                 type="password" 
                                 value={password}
@@ -274,8 +275,48 @@
             </div>
         );
 
+        const ProfileModal = ({ user, userProfile, handleLogout, setProfileOpen }) => (
+            <div 
+                className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
+                onClick={() => setProfileOpen(false)} // 点击背景关闭
+            >
+                <div 
+                    className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full relative"
+                    onClick={(e) => e.stopPropagation()} // 阻止点击模态框内部时关闭
+                >
+                    <button 
+                        onClick={() => setProfileOpen(false)}
+                        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                    
+                    <div className="flex flex-col items-center">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Profile</h2>
+                        <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                            <UserCircle className="w-20 h-20 text-green-600" />
+                        </div>
+                        <p className="text-lg font-medium text-gray-700 break-all">
+                            {user?.email}
+                        </p>
+                        <p className="text-sm text-gray-500 mb-6">
+                            Username: {userProfile?.username || 'N/A'}
+                        </p>
+
+                        <button
+                            onClick={handleLogout}
+                            className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+                        >
+                            <LogOut className="w-5 h-5" />
+                            <span>Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+
         const HomePage = ({
-            setMenuOpen, menuOpen, userProfile, user, handleLogout, setCurrentPage,
+            setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
             leaderboard, uploadInputRef, cameraInputRef, handleImageUpload,
             scannedImage, scanResult
         }) => (
@@ -286,9 +327,12 @@
                             {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                         </button>
                         <h1 className="text-2xl font-bold">Recycling Scanner</h1>
-                        <span className="text-sm font-medium pr-2 truncate max-w-[100px]">
-                            {userProfile?.username || user?.email}
-                        </span>
+                        <button 
+                            onClick={() => setProfileOpen(true)}
+                            className="p-2 hover:bg-green-700 rounded-full"
+                        >
+                            <UserCircle className="w-7 h-7" />
+                        </button>
                     </div>
                 </header>
 
@@ -355,7 +399,6 @@
                             )}
                         </div>
                     </div>
-
                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-8 text-center">
                         <h3 className="text-2xl font-bold text-white mb-4">Scan Your Item</h3>
                         <p className="text-white mb-6">Take a photo or upload an image to identify recyclable items</p>
@@ -391,7 +434,6 @@
                             className="hidden"
                         />
                     </div>
-
                     {scannedImage && (
                         <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
                             <h3 className="text-xl font-bold mb-4">Scan Result</h3>
@@ -438,7 +480,7 @@
         );
 
         const InformationPage = ({
-            setMenuOpen, menuOpen, userProfile, user, handleLogout, setCurrentPage,
+            setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
             recyclingInfo
         }) => (
             <div className="min-h-screen bg-gray-50">
@@ -448,9 +490,12 @@
                             {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                         </button>
                         <h1 className="text-2xl font-bold">Recycling Information</h1>
-                        <span className="text-sm font-medium pr-2 truncate max-w-[100px]">
-                            {userProfile?.username || user?.email}
-                        </span>
+                        <button 
+                            onClick={() => setProfileOpen(true)}
+                            className="p-2 hover:bg-green-700 rounded-full"
+                        >
+                            <UserCircle className="w-7 h-7" />
+                        </button>
                     </div>
                 </header>
                 {menuOpen && (
@@ -529,7 +574,7 @@
         );
 
         const FeedbackPage = ({
-            setMenuOpen, menuOpen, userProfile, user, handleLogout, setCurrentPage,
+            setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
             feedback, setFeedback, handleFeedbackSubmit, feedbackSubmitted
         }) => (
             <div className="min-h-screen bg-gray-50">
@@ -539,9 +584,12 @@
                             {menuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                         </button>
                         <h1 className="text-2xl font-bold">Feedback</h1>
-                        <span className="text-sm font-medium pr-2 truncate max-w-[100px]">
-                            {userProfile?.username || user?.email}
-                        </span>
+                        <button 
+                            onClick={() => setProfileOpen(true)}
+                            className="p-2 hover:bg-green-700 rounded-full"
+                        >
+                            <UserCircle className="w-7 h-7" />
+                        </button>
                     </div>
                 </header>
                 {menuOpen && (
@@ -634,10 +682,10 @@
             // --- Firebase 状态 ---
             const [user, setUser] = useState(null); 
             const [userProfile, setUserProfile] = useState(null); 
-            
-            // *** 恢复：添加 firebaseReady 状态 ***
             const [firebaseReady, setFirebaseReady] = useState(false); 
             const [isAuthLoading, setIsAuthLoading] = useState(true); 
+            
+            const [profileOpen, setProfileOpen] = useState(false);
             
             const [authError, setAuthError] = useState('');
             const [email, setEmail] = useState('');
@@ -647,37 +695,26 @@
 
             // --- Firebase 效果钩子 ---
 
-            // 1. *** 恢复：监听 'firebase-ready' 事件 ***
+            // 1. 监听 'firebase-ready' 事件
             useEffect(() => {
                 const onFirebaseReady = () => {
-                    console.log("React detected 'firebase-ready' event.");
                     setFirebaseReady(true);
                 };
-
                 if (window.firebase) {
-                    console.log("Firebase was already ready.");
                     onFirebaseReady();
                 } else {
-                    console.log("Adding 'firebase-ready' event listener.");
                     window.addEventListener('firebase-ready', onFirebaseReady);
                 }
-                
                 return () => {
                     window.removeEventListener('firebase-ready', onFirebaseReady);
                 };
-            }, []); // 空依赖数组，只运行一次
+            }, []);
 
-            // 2. *** 恢复：添加对 firebaseReady 的依赖 ***
+            // 2. 监听认证状态 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) {
-                    console.log("Auth listener waiting for Firebase...");
-                    return; 
-                }
-                console.log("Firebase is ready, attaching auth listener.");
+                if (!firebaseReady) return; 
 
-                // *** 恢复：使用 window.firebase.***
                 const unsubscribe = window.firebase.onAuthStateChanged(window.firebase.auth, async (authUser) => {
-                    console.log("onAuthStateChanged triggered.");
                     if (authUser) {
                         setUser(authUser);
                         const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
@@ -694,20 +731,14 @@
                         }
                     }
                     setIsAuthLoading(false); 
-                    console.log("Auth loading complete.");
                 });
                 return () => unsubscribe();
-            }, [firebaseReady]); // *** 依赖 firebaseReady ***
+            }, [firebaseReady, currentPage]);
 
-            // 3. *** 恢复：添加对 firebaseReady 的依赖 ***
+            // 3. 监听排行榜数据 (依赖 firebaseReady)
             useEffect(() => {
-                if (!firebaseReady) {
-                    console.log("Firestore listener waiting for Firebase...");
-                    return; 
-                }
-                console.log("Firebase is ready, attaching Firestore listener.");
+                if (!firebaseReady) return; 
 
-                // *** 恢复：使用 window.firebase.***
                 const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
                 const q = window.firebase.query(usersCollectionRef);
 
@@ -728,40 +759,33 @@
                 });
 
                 return () => unsubscribe(); 
-            }, [firebaseReady]); // *** 依赖 firebaseReady ***
+            }, [firebaseReady]);
 
 
-            // --- 认证处理函数 (恢复) ---
+            // --- 认证处理函数 ---
             const handleAuthAction = async (e) => {
                 e.preventDefault();
                 setAuthError(''); 
-                
-                // *** 恢复：firebaseReady 检查 ***
                 if (!firebaseReady) {
                     setAuthError("Firebase is not ready. Please wait.");
                     return;
                 }
 
                 if (isLoginView) {
-                    // --- 登录 ---
                     try {
-                        // *** 恢复：使用 window.firebase.***
                         await window.firebase.signInWithEmailAndPassword(window.firebase.auth, email, password);
                     } catch (error) {
                         setAuthError(getFriendlyErrorMessage(error));
-                        console.error("Login Error:", error);
                     }
                 } else {
-                    // --- 注册 ---
+                    // *** 修改：使用英语提示 ***
                     if (!username) {
-                        setAuthError('请输入用户名 (Please enter a username)');
+                        setAuthError('Please enter a username');
                         return;
                     }
                     try {
-                        // *** 恢复：使用 window.firebase.***
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
                         const user = userCredential.user;
-                        
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
@@ -772,36 +796,35 @@
                         });
                     } catch (error) {
                         setAuthError(getFriendlyErrorMessage(error));
-                        console.error("Sign Up Error:", error);
                     }
                 }
             };
             
+            // *** 修改：使用英语提示 ***
             const getFriendlyErrorMessage = (error) => {
                 switch(error.code) {
                     case 'auth/invalid-email':
-                        return '无效的邮箱格式 (Invalid email format)';
+                        return 'Invalid email format';
                     case 'auth/user-not-found':
                     case 'auth/wrong-password':
-                        return '邮箱或密码错误 (Incorrect email or password)';
+                        return 'Incorrect email or password';
                     case 'auth/email-already-in-use':
-                        return '该邮箱已被注册 (Email already in use)';
+                        return 'This email is already in use';
                     case 'auth/weak-password':
-                        return '密码太弱，至少需要6位 (Password is too weak, 6 characters min)';
+                        return 'Password is too weak (at least 6 characters)';
                     case 'auth/network-request-failed':
-                        return '网络错误，请检查连接 (Network error)';
+                        return 'Network error, please check your connection';
                     case 'auth/configuration-not-found':
-                         return 'Firebase 配置未找到，请刷新页面重试 (Config not found, refresh)';
+                         return 'Firebase configuration not found. Please refresh.';
                     default:
-                        return error.message;
+                        return error.message; // Default to the raw Firebase error
                 }
             };
             
             const handleLogout = async () => {
                 setMenuOpen(false);
-                // *** 恢复：firebaseReady 检查 ***
+                setProfileOpen(false); 
                 if (!firebaseReady) return;
-                // *** 恢复：使用 window.firebase.***
                 await window.firebase.signOut(window.firebase.auth);
                 setEmail('');
                 setPassword('');
@@ -812,7 +835,7 @@
             };
 
 
-            // --- 图像处理函数 (保持不变) ---
+            // --- 图像处理函数 ---
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -828,7 +851,6 @@
 
             const analyzeImageWithGemini = async (imageData) => {
                 try {
-                    // ... (Gemini API 调用部分) ...
                     if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE' || !GEMINI_API_KEY) {
                         throw new Error('Please set your Gemini API Key in the code');
                     }
@@ -857,12 +879,9 @@
                         }]
                     };
                     
-                    console.log('Sending request to Gemini API...');
                     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(requestBody)
                     });
 
@@ -879,18 +898,13 @@
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
                         
-                        // *** 恢复：firebaseReady 检查 ***
                         if (result.recyclable && user && firebaseReady) {
-                            console.log('Updating user score in Firebase...');
-                            // *** 恢复：使用 window.firebase.***
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
                             await window.firebase.updateDoc(userDocRef, {
                                 score: window.firebase.increment(10), 
                                 items: window.firebase.increment(1)
                             });
-                            console.log('User score updated!');
                         }
-
                     } else {
                         throw new Error('Invalid response format from Gemini');
                     }
@@ -908,10 +922,7 @@
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
 
-                        // *** 恢复：firebaseReady 检查 ***
                         if (mockResult.recyclable && user && firebaseReady) {
-                            console.log('Updating user score (DEMO)...');
-                            // *** 恢复：使用 window.firebase.***
                             const userDocRef = window.firebase.doc(window.firebase.db, "users", user.uid);
                             try {
                                 await window.firebase.updateDoc(userDocRef, {
@@ -922,7 +933,6 @@
                                 console.error("Demo score update failed", err)
                             }
                         }
-
                     }, 1000);
                 }
             };
@@ -936,9 +946,9 @@
                     }, 3000);
                 }
             };
-            // --- 页面路由逻辑 (恢复) ---
+
+            // --- 页面路由逻辑 ---
             
-            // *** 恢复：检查 firebaseReady 和 isAuthLoading ***
             if (!firebaseReady || isAuthLoading) {
                 return <LoadingPage />;
             }
@@ -965,10 +975,9 @@
                         <HomePage 
                             setMenuOpen={setMenuOpen}
                             menuOpen={menuOpen}
-                            userProfile={userProfile}
-                            user={user}
                             handleLogout={handleLogout}
                             setCurrentPage={setCurrentPage}
+                            setProfileOpen={setProfileOpen}
                             leaderboard={leaderboard}
                             uploadInputRef={uploadInputRef}
                             cameraInputRef={cameraInputRef}
@@ -981,10 +990,9 @@
                         <InformationPage 
                             setMenuOpen={setMenuOpen}
                             menuOpen={menuOpen}
-                            userProfile={userProfile}
-                            user={user}
                             handleLogout={handleLogout}
                             setCurrentPage={setCurrentPage}
+                            setProfileOpen={setProfileOpen}
                             recyclingInfo={recyclingInfo}
                         />}
                     
@@ -992,15 +1000,23 @@
                         <FeedbackPage 
                             setMenuOpen={setMenuOpen}
                             menuOpen={menuOpen}
-                            userProfile={userProfile}
-                            user={user}
                             handleLogout={handleLogout}
                             setCurrentPage={setCurrentPage}
+                            setProfileOpen={setProfileOpen}
                             feedback={feedback}
                             setFeedback={setFeedback}
                             handleFeedbackSubmit={handleFeedbackSubmit}
                             feedbackSubmitted={feedbackSubmitted}
                         />}
+                    
+                    {profileOpen && user && (
+                        <ProfileModal 
+                            user={user}
+                            userProfile={userProfile}
+                            handleLogout={handleLogout}
+                            setProfileOpen={setProfileOpen}
+                        />
+                    )}
                 </>
             );
         };
