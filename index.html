@@ -35,7 +35,8 @@
         increment,
         where,
         getDocs,
-        addDoc
+        addDoc,
+        deleteDoc // *** 新增 deleteDoc ***
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
       try {
@@ -69,7 +70,8 @@
           increment,
           where,
           getDocs,
-          addDoc
+          addDoc,
+          deleteDoc // *** 暴露 deleteDoc ***
         };
         
         console.log("Firebase module script loaded and initialized.");
@@ -94,7 +96,8 @@
         const { useState, useRef, useEffect } = React;
 
         // Gemini API Configuration
-        const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
+        // *** 使用了新的 API Key ***
+        const GEMINI_API_KEY = 'AIzaSyDoW3On70lwoHcf2uvdxpLMXgd2frYjXVk'; 
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
         // *** 管理员/特权邮箱白名单 (超级管理员) ***
@@ -243,17 +246,15 @@
             </div>
         );
 
-        // *** 修改：增强的管理员控制台页面 ***
         const AdminPage = ({ setCurrentPage, currentUser }) => {
-            const [activeTab, setActiveTab] = useState('codes'); // 'codes' or 'admins'
+            const [activeTab, setActiveTab] = useState('users'); 
             const [codes, setCodes] = useState([]);
-            const [admins, setAdmins] = useState([]);
+            const [users, setUsers] = useState([]); 
             const [isLoading, setIsLoading] = useState(true);
             const [genCount, setGenCount] = useState(5);
             const [isGenerating, setIsGenerating] = useState(false);
-            const [newAdminEmail, setNewAdminEmail] = useState('');
-            const [isAddingAdmin, setIsAddingAdmin] = useState(false);
-
+            const [searchTerm, setSearchTerm] = useState(''); 
+            
             // 获取激活码
             const fetchCodes = async () => {
                 setIsLoading(true);
@@ -266,7 +267,7 @@
                         id: doc.id,
                         ...doc.data()
                     }));
-                    data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); // 最新在前 (fix sort order)
+                    data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
                     setCodes(data);
                 } catch (error) {
                     console.error("Error loading codes:", error);
@@ -275,55 +276,45 @@
                     setIsLoading(false);
                 }
             };
+            
+            // *** 新增：删除激活码函数 ***
+            const handleDeleteCode = async (codeId) => {
+                if (!confirm("Are you sure you want to delete this code?")) return;
+                try {
+                    await window.firebase.deleteDoc(window.firebase.doc(window.firebase.db, 'activation_codes', codeId));
+                    // 直接更新本地状态，避免重新请求
+                    setCodes(prev => prev.filter(c => c.id !== codeId));
+                } catch (error) {
+                    console.error("Error deleting code:", error);
+                    alert("Error deleting code: " + error.message);
+                }
+            };
 
-            // 获取管理员列表
-            const fetchAdmins = async () => {
+            // 获取所有用户
+            const fetchUsers = async () => {
                 setIsLoading(true);
                 try {
-                    // 获取数据库中 isAdmin 为 true 的用户
-                    const q = window.firebase.query(
-                        window.firebase.collection(window.firebase.db, 'users'),
-                        window.firebase.where('isAdmin', '==', true)
-                    );
+                    const q = window.firebase.query(window.firebase.collection(window.firebase.db, 'users'));
                     const snapshot = await window.firebase.getDocs(q);
-                    let dbAdmins = snapshot.docs.map(doc => ({
+                    const data = snapshot.docs.map(doc => ({
                         id: doc.id,
                         ...doc.data(),
-                        source: 'database'
+                        isSuperAdmin: ADMIN_EMAILS.includes(doc.data().email)
                     }));
-                    
-                    // 合并硬编码的超级管理员
-                    const superAdmins = ADMIN_EMAILS.map((email, index) => ({
-                        id: `super-${index}`,
-                        email: email,
-                        username: 'Super Admin',
-                        source: 'hardcoded',
-                        isAdmin: true
-                    }));
-
-                    // 去重合并 (优先显示数据库信息如果存在)
-                    const mergedAdmins = [...dbAdmins];
-                    superAdmins.forEach(superAdmin => {
-                        if (!mergedAdmins.find(a => a.email === superAdmin.email)) {
-                            mergedAdmins.push(superAdmin);
-                        }
-                    });
-                    
-                    setAdmins(mergedAdmins);
+                    setUsers(data);
                 } catch (error) {
-                    console.error("Error loading admins:", error);
-                    alert("Error loading admins: " + error.message);
+                    console.error("Error loading users:", error);
+                    alert("Error loading users: " + error.message);
                 } finally {
                     setIsLoading(false);
                 }
             };
 
-            // 切换标签时加载数据
             useEffect(() => {
                 if (activeTab === 'codes') {
                     fetchCodes();
                 } else {
-                    fetchAdmins();
+                    fetchUsers();
                 }
             }, [activeTab]);
 
@@ -353,61 +344,98 @@
                 }
             };
             
-            // 添加管理员
-            const handleAddAdmin = async () => {
-                if (!newAdminEmail.trim()) return;
-                setIsAddingAdmin(true);
-                
-                try {
-                    // 1. 查找用户
-                    const usersRef = window.firebase.collection(window.firebase.db, 'users');
-                    const q = window.firebase.query(usersRef, window.firebase.where('email', '==', newAdminEmail.trim()));
-                    const snapshot = await window.firebase.getDocs(q);
-                    
-                    if (snapshot.empty) {
-                        alert("User not found! They must register first.");
-                        setIsAddingAdmin(false);
-                        return;
-                    }
-                    
-                    // 2. 更新用户
-                    const userDoc = snapshot.docs[0];
-                    await window.firebase.updateDoc(userDoc.ref, {
-                        isAdmin: true,
-                        isPremium: true // 管理员自动获得高级权限
-                    });
-                    
-                    alert(`Successfully added ${newAdminEmail} as admin.`);
-                    setNewAdminEmail('');
-                    fetchAdmins(); // 刷新列表
-                    
-                } catch (error) {
-                    console.error("Error adding admin:", error);
-                    alert("Error adding admin: " + error.message);
-                } finally {
-                    setIsAddingAdmin(false);
-                }
-            };
-            
-            // 移除管理员
-            const handleRemoveAdmin = async (admin) => {
-                if (admin.source === 'hardcoded') {
-                    alert("Cannot remove Super Admin (Hardcoded).");
+            // 切换管理员权限 (isAdminPremium)
+            const toggleAdmin = async (targetUser) => {
+                if (targetUser.isSuperAdmin) {
+                    alert("Cannot modify Super Admin.");
                     return;
                 }
                 
-                if (!confirm(`Are you sure you want to remove admin rights from ${admin.email}?`)) return;
+                // *** 逻辑变更: 修改 isAdminPremium ***
+                const newIsAdminPremium = !targetUser.isAdminPremium;
                 
                 try {
-                    const userDocRef = window.firebase.doc(window.firebase.db, 'users', admin.id);
+                    const userDocRef = window.firebase.doc(window.firebase.db, 'users', targetUser.id);
                     await window.firebase.updateDoc(userDocRef, {
-                        isAdmin: false
+                        isAdminPremium: newIsAdminPremium
+                        // *** 注意: 不再修改 isPremium ***
                     });
-                    fetchAdmins(); // 刷新
+                    
+                    setUsers(prev => prev.map(u => 
+                        u.id === targetUser.id 
+                        ? { ...u, isAdminPremium: newIsAdminPremium } 
+                        : u
+                    ));
+                    
                 } catch (error) {
-                    alert("Error removing admin: " + error.message);
+                    console.error("Error updating user:", error);
+                    alert("Error updating user: " + error.message);
                 }
             };
+            
+            const filteredUsers = users.filter(user => {
+                const term = searchTerm.toLowerCase();
+                return (
+                    (user.username && user.username.toLowerCase().includes(term)) ||
+                    (user.email && user.email.toLowerCase().includes(term))
+                );
+            });
+            
+            // *** 筛选逻辑变更: 使用 isAdminPremium ***
+            const adminUsers = filteredUsers.filter(u => u.isAdminPremium || u.isSuperAdmin);
+            const regularUsers = filteredUsers.filter(u => !u.isAdminPremium && !u.isSuperAdmin);
+
+            const UserRow = ({ user }) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="p-4">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs ${user.isAdminPremium ? 'bg-purple-600' : 'bg-gray-400'}`}>
+                                {user.username ? user.username[0].toUpperCase() : '?'}
+                            </div>
+                            <div>
+                                <p className="font-medium text-gray-800">{user.username || 'No Name'}</p>
+                                <p className="text-xs text-gray-500">{user.email}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td className="p-4">
+                        <div className="flex gap-2">
+                            {user.isSuperAdmin && (
+                                <span className="px-2 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800 border border-yellow-200">SUPER ADMIN</span>
+                            )}
+                            {user.isAdminPremium && !user.isSuperAdmin && (
+                                <span className="px-2 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">ADMIN</span>
+                            )}
+                            {/* 显示 Premium 状态: isPremium 和 isAdminPremium 都可以视为 Premium 权益 */}
+                            {(user.isPremium || user.isAdminPremium) && (
+                                <span className="px-2 py-1 rounded-full text-xs font-bold bg-yellow-50 text-yellow-600 border border-yellow-200 flex items-center gap-1">
+                                    <Crown className="w-3 h-3" /> PREMIUM
+                                </span>
+                            )}
+                            {!user.isAdminPremium && !user.isPremium && (
+                                <span className="px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-500">USER</span>
+                            )}
+                        </div>
+                    </td>
+                    <td className="p-4">
+                        {!user.isSuperAdmin && (
+                            <button 
+                                onClick={() => toggleAdmin(user)}
+                                className={`text-sm font-medium px-3 py-1 rounded transition ${
+                                    user.isAdminPremium 
+                                    ? 'text-red-600 hover:bg-red-50' 
+                                    : 'text-purple-600 hover:bg-purple-50'
+                                }`}
+                            >
+                                {user.isAdminPremium ? 'Remove Admin' : 'Make Admin'}
+                            </button>
+                        )}
+                        {user.isSuperAdmin && (
+                            <span className="text-xs text-gray-400 italic">Protected</span>
+                        )}
+                    </td>
+                </tr>
+            );
 
             return (
                 <div className="min-h-screen bg-gray-100">
@@ -418,26 +446,24 @@
                             </button>
                             <h1 className="text-xl font-bold">Admin Console</h1>
                         </div>
-                        {/* 标签切换 */}
                         <div className="flex bg-gray-700 rounded-lg p-1">
+                            <button 
+                                onClick={() => setActiveTab('users')}
+                                className={`px-4 py-1 rounded-md text-sm font-medium transition ${activeTab === 'users' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
+                            >
+                                User Management
+                            </button>
                             <button 
                                 onClick={() => setActiveTab('codes')}
                                 className={`px-4 py-1 rounded-md text-sm font-medium transition ${activeTab === 'codes' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
                             >
                                 Activation Codes
                             </button>
-                            <button 
-                                onClick={() => setActiveTab('admins')}
-                                className={`px-4 py-1 rounded-md text-sm font-medium transition ${activeTab === 'admins' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
-                            >
-                                Manage Admins
-                            </button>
                         </div>
                     </header>
                     
                     <div className="p-6 max-w-6xl mx-auto">
                         
-                        {/* === 激活码界面 === */}
                         {activeTab === 'codes' && (
                             <>
                                 <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
@@ -476,13 +502,15 @@
                                                     <th className="p-4">Status</th>
                                                     <th className="p-4">Used By (UID)</th>
                                                     <th className="p-4">Created At</th>
+                                                    {/* *** 新增 Action 列 *** */}
+                                                    <th className="p-4">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y">
                                                 {isLoading ? (
-                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">Loading...</td></tr>
+                                                    <tr><td colSpan="5" className="p-8 text-center text-gray-500">Loading...</td></tr>
                                                 ) : codes.length === 0 ? (
-                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">No codes found.</td></tr>
+                                                    <tr><td colSpan="5" className="p-8 text-center text-gray-500">No codes found.</td></tr>
                                                 ) : (
                                                     codes.map(code => (
                                                         <tr key={code.id} className="hover:bg-gray-50">
@@ -496,6 +524,16 @@
                                                             <td className="p-4 text-sm text-gray-500">
                                                                 {code.createdAt?.seconds ? new Date(code.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}
                                                             </td>
+                                                            {/* *** 新增 删除按钮 *** */}
+                                                            <td className="p-4">
+                                                                <button
+                                                                    onClick={() => handleDeleteCode(code.id)}
+                                                                    className="text-red-600 hover:text-red-800 hover:bg-red-50 p-2 rounded transition"
+                                                                    title="Delete Code"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </td>
                                                         </tr>
                                                     ))
                                                 )}
@@ -506,78 +544,76 @@
                             </>
                         )}
 
-                        {/* === 管理员管理界面 === */}
-                        {activeTab === 'admins' && (
+                        {activeTab === 'users' && (
                             <>
                                 <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Add New Admin</h2>
-                                    <p className="text-sm text-gray-500 mb-4">Enter the email of a <b>registered user</b> to grant them admin privileges.</p>
-                                    <div className="flex gap-4 items-end flex-wrap">
-                                        <div className="flex-1 max-w-md">
-                                            <label className="block text-sm font-medium text-gray-600 mb-1">User Email</label>
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                                        <h2 className="text-lg font-bold text-gray-800">Manage Users & Admins</h2>
+                                        <div className="relative max-w-md w-full">
                                             <input 
-                                                type="email" 
-                                                value={newAdminEmail} 
-                                                onChange={(e) => setNewAdminEmail(e.target.value)}
-                                                className="w-full px-4 py-2 border rounded-lg"
-                                                placeholder="user@example.com"
+                                                type="text" 
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                placeholder="Search by email or username..."
+                                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                                             />
+                                            <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                            </svg>
                                         </div>
-                                        <button 
-                                            onClick={handleAddAdmin}
-                                            disabled={isAddingAdmin || !newAdminEmail}
-                                            className="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400 transition"
-                                        >
-                                            {isAddingAdmin ? 'Adding...' : 'Make Admin'}
-                                        </button>
                                     </div>
                                 </div>
 
-                                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-                                    <div className="p-6 border-b flex justify-between items-center">
-                                        <h2 className="text-lg font-bold text-gray-800">Current Admins ({admins.length})</h2>
-                                        <button onClick={fetchAdmins} className="text-blue-600 hover:underline text-sm">Refresh</button>
+                                {/* Admin List Section */}
+                                <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
+                                    <div className="p-4 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+                                        <Shield className="w-5 h-5 text-purple-600" />
+                                        <h3 className="font-bold text-purple-800">Administrators ({adminUsers.length})</h3>
                                     </div>
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left min-w-[600px]">
+                                        <table className="w-full text-left">
                                             <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
                                                 <tr>
-                                                    <th className="p-4">Email</th>
-                                                    <th className="p-4">Username</th>
-                                                    <th className="p-4">Role Type</th>
-                                                    <th className="p-4">Action</th>
+                                                    <th className="p-4">User</th>
+                                                    <th className="p-4">Role</th>
+                                                    <th className="p-4">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y">
                                                 {isLoading ? (
-                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">Loading...</td></tr>
-                                                ) : admins.length === 0 ? (
-                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">No admins found.</td></tr>
+                                                    <tr><td colSpan="3" className="p-8 text-center text-gray-500">Loading...</td></tr>
+                                                ) : adminUsers.length === 0 ? (
+                                                    <tr><td colSpan="3" className="p-8 text-center text-gray-500">No administrators found.</td></tr>
                                                 ) : (
-                                                    admins.map(admin => (
-                                                        <tr key={admin.id} className="hover:bg-gray-50">
-                                                            <td className="p-4 font-medium">{admin.email}</td>
-                                                            <td className="p-4 text-sm text-gray-500">{admin.username || '-'}</td>
-                                                            <td className="p-4">
-                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${admin.source === 'hardcoded' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700'}`}>
-                                                                    {admin.source === 'hardcoded' ? 'SUPER ADMIN' : 'ADMIN'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-4">
-                                                                {admin.source !== 'hardcoded' && (
-                                                                    <button 
-                                                                        onClick={() => handleRemoveAdmin(admin)}
-                                                                        className="text-red-600 hover:text-red-800 text-sm font-medium"
-                                                                    >
-                                                                        Remove
-                                                                    </button>
-                                                                )}
-                                                                {admin.source === 'hardcoded' && (
-                                                                    <span className="text-gray-400 text-xs italic">Cannot Remove</span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    ))
+                                                    adminUsers.map(user => <UserRow key={user.id} user={user} />)
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Regular User List Section */}
+                                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                    <div className="p-4 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+                                        <UserCircle className="w-5 h-5 text-gray-600" />
+                                        <h3 className="font-bold text-gray-700">Regular Users ({regularUsers.length})</h3>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                                                <tr>
+                                                    <th className="p-4">User</th>
+                                                    <th className="p-4">Role</th>
+                                                    <th className="p-4">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {isLoading ? (
+                                                    <tr><td colSpan="3" className="p-8 text-center text-gray-500">Loading...</td></tr>
+                                                ) : regularUsers.length === 0 ? (
+                                                    <tr><td colSpan="3" className="p-8 text-center text-gray-500">No regular users found.</td></tr>
+                                                ) : (
+                                                    regularUsers.map(user => <UserRow key={user.id} user={user} />)
                                                 )}
                                             </tbody>
                                         </table>
@@ -718,8 +754,11 @@
             resendStatus,
             setCurrentPage 
         }) => {
-            // *** 修改：只要数据库 isAdmin 为 true 或在白名单中，都算管理员 ***
-            const isAdmin = user && (ADMIN_EMAILS.includes(user.email) || userProfile?.isAdmin);
+            // *** 修改：检测 isAdminPremium 或白名单 ***
+            const isAdmin = user && (ADMIN_EMAILS.includes(user.email) || userProfile?.isAdminPremium);
+            
+            // *** 修改: isPremium 和 isAdminPremium 都算作“Premium 会员” ***
+            const isEffectivePremium = userProfile?.isPremium || userProfile?.isAdminPremium;
 
             return (
                 <div 
@@ -743,7 +782,7 @@
                             <div
                                 className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4 relative"
                             >
-                                {userProfile?.isPremium ? (
+                                {isEffectivePremium ? (
                                     <div className="relative">
                                         <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1">
                                             <Crown className="w-6 h-6 text-white" />
@@ -759,6 +798,7 @@
                                 {user?.email}
                             </p>
                             
+                            {/* 邮箱验证状态 */}
                             <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-xs px-2 py-0.5 rounded border ${user?.emailVerified ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                     {user?.emailVerified ? 'Verified' : 'Unverified'}
@@ -778,10 +818,11 @@
                                 Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
                             </p>
                             
-                            <div className={`px-4 py-1 rounded-full text-sm font-bold mb-6 ${userProfile?.isPremium ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {userProfile?.isPremium ? '👑 Premium Member' : 'Standard Member'}
+                            <div className={`px-4 py-1 rounded-full text-sm font-bold mb-6 ${isEffectivePremium ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {isEffectivePremium ? '👑 Premium Member' : 'Standard Member'}
                             </div>
                             
+                            {/* 激活框只在用户没有真正的 isPremium 时显示，即使用户是 AdminPremium 也可以输入激活码（虽然没必要，但符合“不影响”逻辑）*/}
                             {!userProfile?.isPremium && (
                                 <div className="w-full mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Activate Premium</h3>
@@ -809,7 +850,7 @@
                                 </div>
                             )}
 
-                            {/* *** 管理员入口 (现在也检查 userProfile.isAdmin) *** */}
+                            {/* *** 管理员入口 *** */}
                             {isAdmin && user?.emailVerified && (
                                 <button
                                     onClick={() => {
@@ -893,7 +934,7 @@
                         </button>
                     </div>
                 )}
-
+                
                 <div className="p-6 max-w-4xl mx-auto">
                     {/* ... (排行榜) ... */}
                     <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
@@ -977,7 +1018,8 @@
                     {/* *** 扫描次数显示 *** */}
                     <div className="mb-4 flex justify-between items-center px-2">
                         <span className="font-semibold text-gray-700">Daily Usage:</span>
-                        {userProfile?.isPremium ? (
+                        {/* *** 修改判定: isPremium 或 isAdminPremium *** */}
+                        {(userProfile?.isPremium || userProfile?.isAdminPremium) ? (
                             <span className="flex items-center gap-1 text-yellow-600 font-bold">
                                 <Crown className="w-5 h-5" /> Premium (Unlimited)
                             </span>
@@ -1285,7 +1327,7 @@
             const [user, setUser] = useState(null); 
             const [userProfile, setUserProfile] = useState(null); 
             const [firebaseReady, setFirebaseReady] = useState(false); 
-            const [isAuthLoading, setIsAuthLoading] = useState(true); // 全局加载 (只在启动时)
+            const [isAuthLoading, setIsAuthLoading] = useState(true); 
             
             const [isAuthActionLoading, setIsAuthActionLoading] = useState(false); 
             
@@ -1352,7 +1394,7 @@
                 };
             }, []); 
 
-            // 2. 监听认证状态 (依赖 firebaseReady)
+            // 2. 监听认证状态
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -1366,7 +1408,7 @@
                     try {
                         if (authUser) {
                             console.log("Auth listener: User is logged in.", authUser.uid);
-                            setUser(authUser);
+                            setUser(authUser); // 这里会触发重新渲染，user?.emailVerified 会更新
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
                             
@@ -1387,20 +1429,20 @@
                                     data.lastScanDate = todayStr;
                                 }
                                 
-                                // *** 自动检测白名单并升级 ***
-                                if (ADMIN_EMAILS.includes(authUser.email) && !data.isPremium) {
-                                    console.log("Admin email detected, upgrading to Premium...");
+                                // *** 修改: 自动检测白名单并赋予 AdminPremium ***
+                                if (ADMIN_EMAILS.includes(authUser.email) && !data.isAdminPremium) {
+                                    console.log("Super Admin email detected, granting AdminPremium...");
                                     await window.firebase.updateDoc(userDocRef, {
-                                        isPremium: true
+                                        isAdminPremium: true
                                     });
-                                    data.isPremium = true;
+                                    data.isAdminPremium = true;
                                 }
 
                                 setUserProfile(data);
                             } else {
                                 console.warn("User doc not found! Creating one...");
                                 
-                                // *** 检测是否是白名单用户 ***
+                                // *** 修改: 检测是否是白名单用户, 赋予 AdminPremium ***
                                 const isSpecialAdmin = ADMIN_EMAILS.includes(authUser.email);
                                 
                                 const newProfile = {
@@ -1412,7 +1454,8 @@
                                     joinedAt: new Date(),
                                     dailyScanCount: 0,
                                     lastScanDate: todayStr,
-                                    isPremium: isSpecialAdmin // 自动设置为 true
+                                    isAdminPremium: isSpecialAdmin, // 新字段
+                                    isPremium: false // 默认为 false, isPremium 仅用于激活码
                                 };
                                 await window.firebase.setDoc(userDocRef, newProfile);
                                 setUserProfile(newProfile); 
@@ -1426,6 +1469,7 @@
                             setUser(null);
                             setUserProfile(null);
                             setLeaderboard([]); 
+                            setCurrentUserEntry(null); 
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
@@ -1541,7 +1585,7 @@
 
                         console.log("Sign up successful, creating user doc...");
                         
-                        // *** 注册时也检查白名单 ***
+                        // *** 注册时也检查白名单 (AdminPremium) ***
                         const isSpecialAdmin = ADMIN_EMAILS.includes(email);
 
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
@@ -1553,7 +1597,8 @@
                             joinedAt: new Date(),
                             dailyScanCount: 0,
                             lastScanDate: todayStr,
-                            isPremium: isSpecialAdmin // 自动设置为 true
+                            isAdminPremium: isSpecialAdmin, // 新字段
+                            isPremium: false // 默认为 false
                         });
                         console.log("User doc created.");
 
@@ -1704,7 +1749,8 @@
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    if (!userProfile?.isPremium && (userProfile?.dailyScanCount || 0) >= 5) {
+                    // *** 逻辑变更: isPremium 或 isAdminPremium 都可以无限制扫描 ***
+                    if (!(userProfile?.isPremium || userProfile?.isAdminPremium) && (userProfile?.dailyScanCount || 0) >= 5) {
                         alert("Daily scan limit (5) reached! Please come back tomorrow or upgrade to Premium.");
                         e.target.value = ''; 
                         return;
@@ -1882,7 +1928,7 @@
                         />}
                     
                     {currentPage === 'admin' && user && (
-                        <AdminPage setCurrentPage={setCurrentPage} />
+                        <AdminPage setCurrentPage={setCurrentPage} currentUser={user} />
                     )}
 
                     {currentPage === 'information' && user && 
