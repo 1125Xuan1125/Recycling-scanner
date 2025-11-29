@@ -20,7 +20,8 @@
         onAuthStateChanged,
         createUserWithEmailAndPassword,
         signInWithEmailAndPassword,
-        signOut
+        signOut,
+        sendEmailVerification // *** 恢复：发送验证邮件 ***
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
       import { 
         getFirestore, 
@@ -31,7 +32,10 @@
         onSnapshot, 
         query,
         updateDoc,
-        increment
+        increment,
+        where,
+        getDocs,
+        addDoc
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
 
       try {
@@ -54,6 +58,7 @@
           createUserWithEmailAndPassword,
           signInWithEmailAndPassword,
           signOut,
+          sendEmailVerification, // *** 导出 ***
           doc,
           setDoc,
           getDoc,
@@ -61,7 +66,10 @@
           onSnapshot,
           query,
           updateDoc,
-          increment
+          increment,
+          where,
+          getDocs,
+          addDoc
         };
         
         console.log("Firebase module script loaded and initialized.");
@@ -126,7 +134,6 @@
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
         );
-        // *** 修复：使用正确的奖杯图标 ***
         const Trophy = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18m-12 0h12v6a6 6 0 0 1-12 0V4Zm6 11v5m-3 0h6" />
@@ -217,7 +224,6 @@
                 <div className="bg-white rounded-lg shadow-xl p-8 max-w-lg w-full">
                     <h2 className="text-2xl font-bold text-red-700 mb-4">A Critical Error Occurred</h2>
                     <p className="text-gray-700 mb-2">The application could not start. This is often due to a Firebase configuration issue or a network problem.</p>
-                    <p className="text-gray-500 text-sm mb-4">Please ensure you are connected to the internet, that ad-blockers are disabled, and that the Firebase configuration is correct.</p>
                     <div className="bg-gray-100 p-4 rounded text-red-800 font-mono text-sm overflow-x-auto">
                         <strong>Error:</strong> {message || "Unknown Error"}
                     </div>
@@ -302,9 +308,10 @@
                         </div>
                         
                         {signupSuccess && (
-                            <p className="text-sm text-green-600 text-center">
-                                Sign up successful! Please log in.
-                            </p>
+                            <div className="p-3 bg-green-100 border border-green-300 text-green-700 rounded text-sm text-center">
+                                <p className="font-bold">Sign up successful!</p>
+                                <p>Verification email sent. <strong>Please check your Inbox and Spam folder</strong>.</p>
+                            </div>
                         )}
                         {authError && (
                             <p className="text-sm text-red-600 text-center">{authError}</p>
@@ -341,63 +348,183 @@
             user, 
             userProfile, 
             handleLogout, 
-            setProfileOpen
-        }) => (
-            <div 
-                className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
-                onClick={() => setProfileOpen(false)} 
-            >
-                <div 
-                    className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full relative"
-                    onClick={(e) => e.stopPropagation()} 
-                >
-                    <button 
-                        onClick={() => setProfileOpen(false)}
-                        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
-                    >
-                        <X className="w-6 h-6" />
-                    </button>
-                    
-                    <div className="flex flex-col items-center">
-                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Profile</h2>
-                        
-                        <div
-                            className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4 relative"
-                        >
-                            {userProfile?.isPremium ? (
-                                <div className="relative">
-                                    <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1">
-                                        <Crown className="w-6 h-6 text-white" />
-                                    </div>
-                                    <UserCircle className="w-20 h-20 text-yellow-600" />
-                                </div>
-                            ) : (
-                                <UserCircle className="w-20 h-20 text-green-600" />
-                            )}
-                        </div>
-                        
-                        <p className="text-lg font-medium text-gray-700 break-all">
-                            {user?.email}
-                        </p>
-                        <p className="text-sm text-gray-500 mb-2">
-                            Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
-                        </p>
-                        
-                        <div className={`px-4 py-1 rounded-full text-sm font-bold mb-6 ${userProfile?.isPremium ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
-                            {userProfile?.isPremium ? '👑 Premium Member' : 'Standard Member'}
-                        </div>
+            setProfileOpen,
+            activationCode,
+            setActivationCode,
+            handleActivatePremium,
+            activationStatus,
+            isActivating,
+            handleResendVerification, // *** 新增 ***
+            resendStatus // *** 新增 ***
+        }) => {
+            // Admin Tools (State moved inside here for simplicity in this file)
+            const [genCount, setGenCount] = useState(10);
+            const [generatedCodes, setGeneratedCodes] = useState([]);
+            const [isGenerating, setIsGenerating] = useState(false);
+            
+            const handleBatchGenerate = async () => {
+                if (!window.firebase) return;
+                setIsGenerating(true);
+                const codes = [];
+                const batchPromises = [];
+                try {
+                    for (let i = 0; i < genCount; i++) {
+                        const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+                        const code = `VIP-${randomPart}`;
+                        codes.push(code);
+                        batchPromises.push(
+                            window.firebase.addDoc(window.firebase.collection(window.firebase.db, 'activation_codes'), {
+                                code: code,
+                                isUsed: false,
+                                type: 'lifetime',
+                                createdAt: new Date()
+                            })
+                        );
+                    }
+                    await Promise.all(batchPromises);
+                    setGeneratedCodes(codes);
+                } catch (error) {
+                    console.error("Batch generation failed:", error);
+                    alert("Failed to generate codes: " + error.message);
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
 
-                        <button
-                            onClick={handleLogout}
-                            className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+            return (
+                <div 
+                    className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4"
+                    onClick={() => setProfileOpen(false)} 
+                >
+                    <div 
+                        className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full relative max-h-[90vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()} 
+                    >
+                        <button 
+                            onClick={() => setProfileOpen(false)}
+                            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
                         >
-                            <LogOut className="w-5 h-5" />
-                            <span>Logout</span>
+                            <X className="w-6 h-6" />
                         </button>
+                        
+                        <div className="flex flex-col items-center">
+                            <h2 className="text-2xl font-bold text-gray-800 mb-4">Profile</h2>
+                            
+                            <div
+                                className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4 relative"
+                            >
+                                {userProfile?.isPremium ? (
+                                    <div className="relative">
+                                        <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1">
+                                            <Crown className="w-6 h-6 text-white" />
+                                        </div>
+                                        <UserCircle className="w-20 h-20 text-yellow-600" />
+                                    </div>
+                                ) : (
+                                    <UserCircle className="w-20 h-20 text-green-600" />
+                                )}
+                            </div>
+                            
+                            <p className="text-lg font-medium text-gray-700 break-all text-center">
+                                {user?.email}
+                            </p>
+                            
+                            {/* *** 邮箱验证状态 *** */}
+                            <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-xs px-2 py-0.5 rounded border ${user?.emailVerified ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                                    {user?.emailVerified ? 'Verified' : 'Unverified'}
+                                </span>
+                                {!user?.emailVerified && (
+                                    <button 
+                                        onClick={handleResendVerification} 
+                                        className="text-xs text-blue-600 underline hover:text-blue-800"
+                                    >
+                                        Resend Email
+                                    </button>
+                                )}
+                            </div>
+                            {resendStatus && <p className="text-xs text-green-600 mb-2">{resendStatus}</p>}
+
+                            <p className="text-sm text-gray-500 mb-2">
+                                Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
+                            </p>
+                            
+                            <div className={`px-4 py-1 rounded-full text-sm font-bold mb-6 ${userProfile?.isPremium ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {userProfile?.isPremium ? '👑 Premium Member' : 'Standard Member'}
+                            </div>
+                            
+                            {/* 激活码输入 */}
+                            {!userProfile?.isPremium && (
+                                <div className="w-full mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <h3 className="text-sm font-semibold text-gray-700 mb-2">Activate Premium</h3>
+                                    <div className="flex gap-2 mb-2">
+                                        <input 
+                                            type="text" 
+                                            value={activationCode}
+                                            onChange={(e) => setActivationCode(e.target.value)}
+                                            placeholder="Enter Code"
+                                            className="flex-1 px-3 py-2 text-sm border rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                        />
+                                        <button 
+                                            onClick={handleActivatePremium}
+                                            disabled={isActivating || !activationCode.trim()}
+                                            className="bg-green-600 text-white px-3 py-2 rounded text-sm font-semibold hover:bg-green-700 disabled:bg-gray-400"
+                                        >
+                                            {isActivating ? '...' : 'Go'}
+                                        </button>
+                                    </div>
+                                    {activationStatus && (
+                                        <p className={`text-xs ${activationStatus.includes('Success') ? 'text-green-600' : 'text-red-600'}`}>
+                                            {activationStatus}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* *** 安全的管理员工具: 必须验证邮箱 *** */}
+                            {user?.email === 'kahxuan1125@gmail.com' && user?.emailVerified && (
+                                <div className="w-full mb-6 pt-4 border-t border-gray-200">
+                                    <h3 className="text-sm font-bold text-gray-800 mb-3">Admin: Generate Codes</h3>
+                                    <div className="flex gap-2 mb-3">
+                                        <input
+                                            type="number"
+                                            value={genCount}
+                                            onChange={(e) => setGenCount(Number(e.target.value))}
+                                            className="w-20 px-3 py-2 text-sm border rounded"
+                                            min="1"
+                                            max="50"
+                                        />
+                                        <button
+                                            onClick={handleBatchGenerate}
+                                            disabled={isGenerating}
+                                            className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm font-semibold hover:bg-blue-700 disabled:bg-gray-400"
+                                        >
+                                            {isGenerating ? 'Generating...' : 'Generate'}
+                                        </button>
+                                    </div>
+                                    {generatedCodes.length > 0 && (
+                                        <div className="bg-gray-100 p-2 rounded text-xs font-mono max-h-32 overflow-y-auto select-all border border-gray-300">
+                                            <p className="text-gray-500 mb-1">Copy these codes:</p>
+                                            {generatedCodes.map((code, i) => (
+                                                <div key={i} className="mb-1">{code}</div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleLogout}
+                                className="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+                            >
+                                <LogOut className="w-5 h-5" />
+                                <span>Logout</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        );
+            );
+        };
 
         const HomePage = ({
             setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
@@ -645,6 +772,7 @@
             </div>
         );
 
+        // --- InformationPage and FeedbackPage (No changes to limit logic) ---
         const InformationPage = ({
             setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
             recyclingInfo
@@ -872,6 +1000,12 @@
 
             const [currentUserEntry, setCurrentUserEntry] = useState(null);
 
+            // *** 新增：激活码相关状态 ***
+            const [activationCode, setActivationCode] = useState('');
+            const [activationStatus, setActivationStatus] = useState('');
+            const [isActivating, setIsActivating] = useState(false);
+            const [resendStatus, setResendStatus] = useState(''); // *** 新增：重发状态 ***
+
             // --- Firebase 效果钩子 ---
 
             // 1. 轮询 (Polling) 增加错误检查
@@ -923,7 +1057,7 @@
                     try {
                         if (authUser) {
                             console.log("Auth listener: User is logged in.", authUser.uid);
-                            setUser(authUser);
+                            setUser(authUser); // 这里会触发重新渲染，user?.emailVerified 会更新
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
                             
@@ -1037,12 +1171,10 @@
 
                 return () => {
                      if (leaderboardListener.current) {
-                        // 注意：如果 onAuthStateChanged 里已经清理了，这里可能会多余，但为了安全起见可以保留
-                        // 实际上 onSnapshot 返回 unsubscribe 函数，我们应该保存它
-                        // 在这里我们直接让 onSnapshot 的返回值覆盖 ref
+                        
                      }
                 };
-            }, [firebaseReady, user]); // 添加 user 依赖，以便在登录状态变化时重新计算排名
+            }, [firebaseReady, user]); 
 
             // --- 认证处理函数 ---
             const handleAuthAction = async (e) => {
@@ -1081,6 +1213,11 @@
                         console.log("Attempting sign up for:", email);
                         const userCredential = await window.firebase.createUserWithEmailAndPassword(window.firebase.auth, email, password);
                         const user = userCredential.user;
+                        
+                        // *** 发送验证邮件 ***
+                        console.log("Sending verification email...");
+                        await window.firebase.sendEmailVerification(user);
+
                         console.log("Sign up successful, creating user doc...");
                         
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
@@ -1150,7 +1287,72 @@
                 setAuthError('');
                 setIsLoginView(true);
                 setSignupSuccess(false); 
+                setActivationCode('');
+                setActivationStatus('');
+                setResendStatus(''); // 清除重发状态
                 setCurrentPage('login'); 
+            };
+
+            // *** 新增：重发验证邮件 ***
+            const handleResendVerification = async () => {
+                if (!user) return;
+                setResendStatus('Sending...');
+                try {
+                    await window.firebase.sendEmailVerification(user);
+                    setResendStatus('Email sent! Please check your inbox.');
+                } catch (error) {
+                    console.error("Error sending verification email:", error);
+                    setResendStatus('Error sending email. Try again later.');
+                }
+            };
+
+            // *** 激活高级会员逻辑 ***
+            const handleActivatePremium = async () => {
+                if (!activationCode.trim()) return;
+                if (!user || !firebaseReady) return;
+
+                setIsActivating(true);
+                setActivationStatus('');
+
+                try {
+                    const codesRef = window.firebase.collection(window.firebase.db, 'activation_codes');
+                    const q = window.firebase.query(
+                        codesRef, 
+                        window.firebase.where('code', '==', activationCode.trim()),
+                        window.firebase.where('isUsed', '==', false)
+                    );
+
+                    const querySnapshot = await window.firebase.getDocs(q);
+
+                    if (querySnapshot.empty) {
+                        setActivationStatus('Invalid or used code.');
+                        setIsActivating(false);
+                        return;
+                    }
+
+                    const codeDoc = querySnapshot.docs[0];
+                    
+                    await window.firebase.updateDoc(codeDoc.ref, {
+                        isUsed: true,
+                        usedBy: user.uid,
+                        usedAt: new Date()
+                    });
+
+                    const userDocRef = window.firebase.doc(window.firebase.db, 'users', user.uid);
+                    await window.firebase.updateDoc(userDocRef, {
+                        isPremium: true
+                    });
+
+                    setUserProfile(prev => ({ ...prev, isPremium: true }));
+                    setActivationStatus('Success! You are now Premium.');
+                    setActivationCode(''); 
+
+                } catch (error) {
+                    console.error("Activation error:", error);
+                    setActivationStatus('Error activating code. Please try again.');
+                } finally {
+                    setIsActivating(false);
+                }
             };
 
 
@@ -1384,6 +1586,14 @@
                             userProfile={userProfile}
                             handleLogout={handleLogout}
                             setProfileOpen={setProfileOpen}
+                            // *** 新增 Props ***
+                            activationCode={activationCode}
+                            setActivationCode={setActivationCode}
+                            handleActivatePremium={handleActivatePremium}
+                            activationStatus={activationStatus}
+                            isActivating={isActivating}
+                            handleResendVerification={handleResendVerification} // *** 传递 ***
+                            resendStatus={resendStatus} // *** 传递 ***
                         />
                     )}
                 </>
