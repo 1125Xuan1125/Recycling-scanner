@@ -21,7 +21,7 @@
         createUserWithEmailAndPassword,
         signInWithEmailAndPassword,
         signOut,
-        sendEmailVerification // *** 恢复：发送验证邮件 ***
+        sendEmailVerification
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js";
       import { 
         getFirestore, 
@@ -58,7 +58,7 @@
           createUserWithEmailAndPassword,
           signInWithEmailAndPassword,
           signOut,
-          sendEmailVerification, // *** 导出 ***
+          sendEmailVerification, 
           doc,
           setDoc,
           getDoc,
@@ -96,6 +96,12 @@
         // Gemini API Configuration
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+        // *** 管理员/特权邮箱白名单 (超级管理员) ***
+        const ADMIN_EMAILS = [
+            'kahxuan1125@gmail.com', 
+            'kahxuan@gmail.com'
+        ];
 
         // --- Icon components ---
         const Camera = ({ className }) => (
@@ -170,6 +176,11 @@
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
         );
+        const Shield = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+        );
         // --- End Icon Components ---
 
         const recyclingInfo = [
@@ -224,12 +235,361 @@
                 <div className="bg-white rounded-lg shadow-xl p-8 max-w-lg w-full">
                     <h2 className="text-2xl font-bold text-red-700 mb-4">A Critical Error Occurred</h2>
                     <p className="text-gray-700 mb-2">The application could not start. This is often due to a Firebase configuration issue or a network problem.</p>
+                    <p className="text-gray-500 text-sm mb-4">Please ensure you are connected to the internet, that ad-blockers are disabled, and that the Firebase configuration is correct.</p>
                     <div className="bg-gray-100 p-4 rounded text-red-800 font-mono text-sm overflow-x-auto">
                         <strong>Error:</strong> {message || "Unknown Error"}
                     </div>
                 </div>
             </div>
         );
+
+        // *** 修改：增强的管理员控制台页面 ***
+        const AdminPage = ({ setCurrentPage, currentUser }) => {
+            const [activeTab, setActiveTab] = useState('codes'); // 'codes' or 'admins'
+            const [codes, setCodes] = useState([]);
+            const [admins, setAdmins] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [genCount, setGenCount] = useState(5);
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [newAdminEmail, setNewAdminEmail] = useState('');
+            const [isAddingAdmin, setIsAddingAdmin] = useState(false);
+
+            // 获取激活码
+            const fetchCodes = async () => {
+                setIsLoading(true);
+                try {
+                    const q = window.firebase.query(
+                        window.firebase.collection(window.firebase.db, 'activation_codes')
+                    );
+                    const snapshot = await window.firebase.getDocs(q);
+                    const data = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    data.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)); // 最新在前 (fix sort order)
+                    setCodes(data);
+                } catch (error) {
+                    console.error("Error loading codes:", error);
+                    alert("Error loading codes: " + error.message);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // 获取管理员列表
+            const fetchAdmins = async () => {
+                setIsLoading(true);
+                try {
+                    // 获取数据库中 isAdmin 为 true 的用户
+                    const q = window.firebase.query(
+                        window.firebase.collection(window.firebase.db, 'users'),
+                        window.firebase.where('isAdmin', '==', true)
+                    );
+                    const snapshot = await window.firebase.getDocs(q);
+                    let dbAdmins = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                        source: 'database'
+                    }));
+                    
+                    // 合并硬编码的超级管理员
+                    const superAdmins = ADMIN_EMAILS.map((email, index) => ({
+                        id: `super-${index}`,
+                        email: email,
+                        username: 'Super Admin',
+                        source: 'hardcoded',
+                        isAdmin: true
+                    }));
+
+                    // 去重合并 (优先显示数据库信息如果存在)
+                    const mergedAdmins = [...dbAdmins];
+                    superAdmins.forEach(superAdmin => {
+                        if (!mergedAdmins.find(a => a.email === superAdmin.email)) {
+                            mergedAdmins.push(superAdmin);
+                        }
+                    });
+                    
+                    setAdmins(mergedAdmins);
+                } catch (error) {
+                    console.error("Error loading admins:", error);
+                    alert("Error loading admins: " + error.message);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // 切换标签时加载数据
+            useEffect(() => {
+                if (activeTab === 'codes') {
+                    fetchCodes();
+                } else {
+                    fetchAdmins();
+                }
+            }, [activeTab]);
+
+            const handleGenerate = async () => {
+                setIsGenerating(true);
+                const batchPromises = [];
+                try {
+                    for (let i = 0; i < genCount; i++) {
+                        const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+                        const code = `VIP-${randomPart}`;
+                        batchPromises.push(
+                            window.firebase.addDoc(window.firebase.collection(window.firebase.db, 'activation_codes'), {
+                                code: code,
+                                isUsed: false,
+                                type: 'lifetime',
+                                createdAt: new Date()
+                            })
+                        );
+                    }
+                    await Promise.all(batchPromises);
+                    await fetchCodes(); 
+                    alert(`Successfully generated ${genCount} codes.`);
+                } catch (error) {
+                    alert("Error generating: " + error.message);
+                } finally {
+                    setIsGenerating(false);
+                }
+            };
+            
+            // 添加管理员
+            const handleAddAdmin = async () => {
+                if (!newAdminEmail.trim()) return;
+                setIsAddingAdmin(true);
+                
+                try {
+                    // 1. 查找用户
+                    const usersRef = window.firebase.collection(window.firebase.db, 'users');
+                    const q = window.firebase.query(usersRef, window.firebase.where('email', '==', newAdminEmail.trim()));
+                    const snapshot = await window.firebase.getDocs(q);
+                    
+                    if (snapshot.empty) {
+                        alert("User not found! They must register first.");
+                        setIsAddingAdmin(false);
+                        return;
+                    }
+                    
+                    // 2. 更新用户
+                    const userDoc = snapshot.docs[0];
+                    await window.firebase.updateDoc(userDoc.ref, {
+                        isAdmin: true,
+                        isPremium: true // 管理员自动获得高级权限
+                    });
+                    
+                    alert(`Successfully added ${newAdminEmail} as admin.`);
+                    setNewAdminEmail('');
+                    fetchAdmins(); // 刷新列表
+                    
+                } catch (error) {
+                    console.error("Error adding admin:", error);
+                    alert("Error adding admin: " + error.message);
+                } finally {
+                    setIsAddingAdmin(false);
+                }
+            };
+            
+            // 移除管理员
+            const handleRemoveAdmin = async (admin) => {
+                if (admin.source === 'hardcoded') {
+                    alert("Cannot remove Super Admin (Hardcoded).");
+                    return;
+                }
+                
+                if (!confirm(`Are you sure you want to remove admin rights from ${admin.email}?`)) return;
+                
+                try {
+                    const userDocRef = window.firebase.doc(window.firebase.db, 'users', admin.id);
+                    await window.firebase.updateDoc(userDocRef, {
+                        isAdmin: false
+                    });
+                    fetchAdmins(); // 刷新
+                } catch (error) {
+                    alert("Error removing admin: " + error.message);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                     <header className="bg-gray-800 text-white p-4 shadow-md flex items-center gap-4 sticky top-0 z-10 justify-between">
+                        <div className="flex items-center gap-4">
+                            <button onClick={() => setCurrentPage('home')} className="p-2 hover:bg-gray-700 rounded-full">
+                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            </button>
+                            <h1 className="text-xl font-bold">Admin Console</h1>
+                        </div>
+                        {/* 标签切换 */}
+                        <div className="flex bg-gray-700 rounded-lg p-1">
+                            <button 
+                                onClick={() => setActiveTab('codes')}
+                                className={`px-4 py-1 rounded-md text-sm font-medium transition ${activeTab === 'codes' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
+                            >
+                                Activation Codes
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('admins')}
+                                className={`px-4 py-1 rounded-md text-sm font-medium transition ${activeTab === 'admins' ? 'bg-white text-gray-900' : 'text-gray-300 hover:text-white'}`}
+                            >
+                                Manage Admins
+                            </button>
+                        </div>
+                    </header>
+                    
+                    <div className="p-6 max-w-6xl mx-auto">
+                        
+                        {/* === 激活码界面 === */}
+                        {activeTab === 'codes' && (
+                            <>
+                                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Generate New Codes</h2>
+                                    <div className="flex gap-4 items-end flex-wrap">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">Quantity</label>
+                                            <input 
+                                                type="number" 
+                                                value={genCount} 
+                                                onChange={(e) => setGenCount(Math.max(1, parseInt(e.target.value)))}
+                                                className="px-4 py-2 border rounded-lg w-32"
+                                                min="1" max="50"
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={handleGenerate}
+                                            disabled={isGenerating}
+                                            className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition"
+                                        >
+                                            {isGenerating ? 'Generating...' : 'Generate Codes'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                    <div className="p-6 border-b flex justify-between items-center">
+                                        <h2 className="text-lg font-bold text-gray-800">Code List ({codes.length})</h2>
+                                        <button onClick={fetchCodes} className="text-blue-600 hover:underline text-sm">Refresh</button>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left min-w-[600px]">
+                                            <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                                                <tr>
+                                                    <th className="p-4">Code</th>
+                                                    <th className="p-4">Status</th>
+                                                    <th className="p-4">Used By (UID)</th>
+                                                    <th className="p-4">Created At</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {isLoading ? (
+                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">Loading...</td></tr>
+                                                ) : codes.length === 0 ? (
+                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">No codes found.</td></tr>
+                                                ) : (
+                                                    codes.map(code => (
+                                                        <tr key={code.id} className="hover:bg-gray-50">
+                                                            <td className="p-4 font-mono font-medium select-all">{code.code}</td>
+                                                            <td className="p-4">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${code.isUsed ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                                                    {code.isUsed ? 'USED' : 'ACTIVE'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4 text-sm text-gray-500">{code.usedBy || '-'}</td>
+                                                            <td className="p-4 text-sm text-gray-500">
+                                                                {code.createdAt?.seconds ? new Date(code.createdAt.seconds * 1000).toLocaleDateString() : 'Just now'}
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* === 管理员管理界面 === */}
+                        {activeTab === 'admins' && (
+                            <>
+                                <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
+                                    <h2 className="text-lg font-bold text-gray-800 mb-4">Add New Admin</h2>
+                                    <p className="text-sm text-gray-500 mb-4">Enter the email of a <b>registered user</b> to grant them admin privileges.</p>
+                                    <div className="flex gap-4 items-end flex-wrap">
+                                        <div className="flex-1 max-w-md">
+                                            <label className="block text-sm font-medium text-gray-600 mb-1">User Email</label>
+                                            <input 
+                                                type="email" 
+                                                value={newAdminEmail} 
+                                                onChange={(e) => setNewAdminEmail(e.target.value)}
+                                                className="w-full px-4 py-2 border rounded-lg"
+                                                placeholder="user@example.com"
+                                            />
+                                        </div>
+                                        <button 
+                                            onClick={handleAddAdmin}
+                                            disabled={isAddingAdmin || !newAdminEmail}
+                                            className="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 disabled:bg-gray-400 transition"
+                                        >
+                                            {isAddingAdmin ? 'Adding...' : 'Make Admin'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                                    <div className="p-6 border-b flex justify-between items-center">
+                                        <h2 className="text-lg font-bold text-gray-800">Current Admins ({admins.length})</h2>
+                                        <button onClick={fetchAdmins} className="text-blue-600 hover:underline text-sm">Refresh</button>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left min-w-[600px]">
+                                            <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                                                <tr>
+                                                    <th className="p-4">Email</th>
+                                                    <th className="p-4">Username</th>
+                                                    <th className="p-4">Role Type</th>
+                                                    <th className="p-4">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {isLoading ? (
+                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">Loading...</td></tr>
+                                                ) : admins.length === 0 ? (
+                                                    <tr><td colSpan="4" className="p-8 text-center text-gray-500">No admins found.</td></tr>
+                                                ) : (
+                                                    admins.map(admin => (
+                                                        <tr key={admin.id} className="hover:bg-gray-50">
+                                                            <td className="p-4 font-medium">{admin.email}</td>
+                                                            <td className="p-4 text-sm text-gray-500">{admin.username || '-'}</td>
+                                                            <td className="p-4">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${admin.source === 'hardcoded' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-700'}`}>
+                                                                    {admin.source === 'hardcoded' ? 'SUPER ADMIN' : 'ADMIN'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-4">
+                                                                {admin.source !== 'hardcoded' && (
+                                                                    <button 
+                                                                        onClick={() => handleRemoveAdmin(admin)}
+                                                                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                                                    >
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                                {admin.source === 'hardcoded' && (
+                                                                    <span className="text-gray-400 text-xs italic">Cannot Remove</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                    </div>
+                </div>
+            );
+        };
 
         const WelcomePage = ({ setCurrentPage }) => (
             <div className="min-h-screen bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 flex items-center justify-center p-6">
@@ -354,42 +714,12 @@
             handleActivatePremium,
             activationStatus,
             isActivating,
-            handleResendVerification, // *** 新增 ***
-            resendStatus // *** 新增 ***
+            handleResendVerification, 
+            resendStatus,
+            setCurrentPage 
         }) => {
-            // Admin Tools (State moved inside here for simplicity in this file)
-            const [genCount, setGenCount] = useState(10);
-            const [generatedCodes, setGeneratedCodes] = useState([]);
-            const [isGenerating, setIsGenerating] = useState(false);
-            
-            const handleBatchGenerate = async () => {
-                if (!window.firebase) return;
-                setIsGenerating(true);
-                const codes = [];
-                const batchPromises = [];
-                try {
-                    for (let i = 0; i < genCount; i++) {
-                        const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
-                        const code = `VIP-${randomPart}`;
-                        codes.push(code);
-                        batchPromises.push(
-                            window.firebase.addDoc(window.firebase.collection(window.firebase.db, 'activation_codes'), {
-                                code: code,
-                                isUsed: false,
-                                type: 'lifetime',
-                                createdAt: new Date()
-                            })
-                        );
-                    }
-                    await Promise.all(batchPromises);
-                    setGeneratedCodes(codes);
-                } catch (error) {
-                    console.error("Batch generation failed:", error);
-                    alert("Failed to generate codes: " + error.message);
-                } finally {
-                    setIsGenerating(false);
-                }
-            };
+            // *** 修改：只要数据库 isAdmin 为 true 或在白名单中，都算管理员 ***
+            const isAdmin = user && (ADMIN_EMAILS.includes(user.email) || userProfile?.isAdmin);
 
             return (
                 <div 
@@ -429,7 +759,6 @@
                                 {user?.email}
                             </p>
                             
-                            {/* *** 邮箱验证状态 *** */}
                             <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-xs px-2 py-0.5 rounded border ${user?.emailVerified ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                                     {user?.emailVerified ? 'Verified' : 'Unverified'}
@@ -453,7 +782,6 @@
                                 {userProfile?.isPremium ? '👑 Premium Member' : 'Standard Member'}
                             </div>
                             
-                            {/* 激活码输入 */}
                             {!userProfile?.isPremium && (
                                 <div className="w-full mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                                     <h3 className="text-sm font-semibold text-gray-700 mb-2">Activate Premium</h3>
@@ -481,36 +809,17 @@
                                 </div>
                             )}
 
-                            {/* *** 安全的管理员工具: 必须验证邮箱 *** */}
-                            {user?.email === 'kahxuan1125@gmail.com' && user?.emailVerified && (
-                                <div className="w-full mb-6 pt-4 border-t border-gray-200">
-                                    <h3 className="text-sm font-bold text-gray-800 mb-3">Admin: Generate Codes</h3>
-                                    <div className="flex gap-2 mb-3">
-                                        <input
-                                            type="number"
-                                            value={genCount}
-                                            onChange={(e) => setGenCount(Number(e.target.value))}
-                                            className="w-20 px-3 py-2 text-sm border rounded"
-                                            min="1"
-                                            max="50"
-                                        />
-                                        <button
-                                            onClick={handleBatchGenerate}
-                                            disabled={isGenerating}
-                                            className="flex-1 bg-blue-600 text-white px-3 py-2 rounded text-sm font-semibold hover:bg-blue-700 disabled:bg-gray-400"
-                                        >
-                                            {isGenerating ? 'Generating...' : 'Generate'}
-                                        </button>
-                                    </div>
-                                    {generatedCodes.length > 0 && (
-                                        <div className="bg-gray-100 p-2 rounded text-xs font-mono max-h-32 overflow-y-auto select-all border border-gray-300">
-                                            <p className="text-gray-500 mb-1">Copy these codes:</p>
-                                            {generatedCodes.map((code, i) => (
-                                                <div key={i} className="mb-1">{code}</div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                            {/* *** 管理员入口 (现在也检查 userProfile.isAdmin) *** */}
+                            {isAdmin && user?.emailVerified && (
+                                <button
+                                    onClick={() => {
+                                        setProfileOpen(false);
+                                        setCurrentPage('admin');
+                                    }}
+                                    className="w-full mb-4 bg-gray-800 text-white py-3 rounded-lg font-semibold hover:bg-gray-900 transition flex items-center justify-center gap-2"
+                                >
+                                    <span>🛠️ Admin Console</span>
+                                </button>
                             )}
 
                             <button
@@ -976,7 +1285,7 @@
             const [user, setUser] = useState(null); 
             const [userProfile, setUserProfile] = useState(null); 
             const [firebaseReady, setFirebaseReady] = useState(false); 
-            const [isAuthLoading, setIsAuthLoading] = useState(true); 
+            const [isAuthLoading, setIsAuthLoading] = useState(true); // 全局加载 (只在启动时)
             
             const [isAuthActionLoading, setIsAuthActionLoading] = useState(false); 
             
@@ -1043,7 +1352,7 @@
                 };
             }, []); 
 
-            // 2. 监听认证状态
+            // 2. 监听认证状态 (依赖 firebaseReady)
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -1057,7 +1366,7 @@
                     try {
                         if (authUser) {
                             console.log("Auth listener: User is logged in.", authUser.uid);
-                            setUser(authUser); // 这里会触发重新渲染，user?.emailVerified 会更新
+                            setUser(authUser);
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
                             
@@ -1078,9 +1387,22 @@
                                     data.lastScanDate = todayStr;
                                 }
                                 
+                                // *** 自动检测白名单并升级 ***
+                                if (ADMIN_EMAILS.includes(authUser.email) && !data.isPremium) {
+                                    console.log("Admin email detected, upgrading to Premium...");
+                                    await window.firebase.updateDoc(userDocRef, {
+                                        isPremium: true
+                                    });
+                                    data.isPremium = true;
+                                }
+
                                 setUserProfile(data);
                             } else {
                                 console.warn("User doc not found! Creating one...");
+                                
+                                // *** 检测是否是白名单用户 ***
+                                const isSpecialAdmin = ADMIN_EMAILS.includes(authUser.email);
+                                
                                 const newProfile = {
                                     uid: authUser.uid,
                                     email: authUser.email,
@@ -1090,7 +1412,7 @@
                                     joinedAt: new Date(),
                                     dailyScanCount: 0,
                                     lastScanDate: todayStr,
-                                    isPremium: false
+                                    isPremium: isSpecialAdmin // 自动设置为 true
                                 };
                                 await window.firebase.setDoc(userDocRef, newProfile);
                                 setUserProfile(newProfile); 
@@ -1104,7 +1426,6 @@
                             setUser(null);
                             setUserProfile(null);
                             setLeaderboard([]); 
-                            setCurrentUserEntry(null); 
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
@@ -1220,6 +1541,9 @@
 
                         console.log("Sign up successful, creating user doc...");
                         
+                        // *** 注册时也检查白名单 ***
+                        const isSpecialAdmin = ADMIN_EMAILS.includes(email);
+
                         await window.firebase.setDoc(window.firebase.doc(window.firebase.db, "users", user.uid), {
                             uid: user.uid,
                             email: user.email,
@@ -1229,7 +1553,7 @@
                             joinedAt: new Date(),
                             dailyScanCount: 0,
                             lastScanDate: todayStr,
-                            isPremium: false
+                            isPremium: isSpecialAdmin // 自动设置为 true
                         });
                         console.log("User doc created.");
 
@@ -1557,6 +1881,10 @@
                             currentUserEntry={currentUserEntry} 
                         />}
                     
+                    {currentPage === 'admin' && user && (
+                        <AdminPage setCurrentPage={setCurrentPage} />
+                    )}
+
                     {currentPage === 'information' && user && 
                         <InformationPage 
                             setMenuOpen={setMenuOpen}
@@ -1594,6 +1922,7 @@
                             isActivating={isActivating}
                             handleResendVerification={handleResendVerification} // *** 传递 ***
                             resendStatus={resendStatus} // *** 传递 ***
+                            setCurrentPage={setCurrentPage} // *** 新增 ***
                         />
                     )}
                 </>
