@@ -14,7 +14,6 @@
     
     <!-- Firebase v10.12.4 -->
     <script type="module">
-      // *** 将 imports 移到顶层，在 try...catch 之外 ***
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
       import { 
         getAuth, 
@@ -34,10 +33,8 @@
         updateDoc,
         increment
       } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js";
-      // *** 移除 Storage ***
 
       try {
-        // try...catch 块现在只包裹执行代码
         const firebaseConfig = {
           apiKey: "AIzaSyDDtDFM7Xa5LTk0pZ13sd__9j_HvmV9K4o",
           authDomain: "recycling-scanner-web.firebaseapp.com",
@@ -49,12 +46,10 @@
 
         const app = initializeApp(firebaseConfig);
         
-        // 将所有需要的函数附加到 window.firebase
         window.firebase = {
           app,
           auth: getAuth(app),
           db: getFirestore(app),
-          // *** 移除 Storage ***
           onAuthStateChanged,
           createUserWithEmailAndPassword,
           signInWithEmailAndPassword,
@@ -67,13 +62,11 @@
           query,
           updateDoc,
           increment
-          // *** 移除 Storage 函数 ***
         };
         
         console.log("Firebase module script loaded and initialized.");
 
       } catch (error) {
-        // 如果初始化失败，设置错误标志
         console.error("CRITICAL FIREBASE MODULE ERROR:", error);
         window.firebaseError = error.message; 
       }
@@ -96,7 +89,7 @@
         const GEMINI_API_KEY = 'AIzaSyD4tQu-bNUIcwg0xjY01vQgNa7fR5AM1zU'; 
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
-        // --- Icon components (保持不变) ---
+        // --- Icon components ---
         const Camera = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -133,9 +126,10 @@
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
         );
+        // *** 修复：使用正确的奖杯图标 ***
         const Trophy = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18m-12 0h12v6a6 6 0 0 1-12 0V4Zm6 11v5m-3 0h6" />
             </svg>
         );
         const Trash2 = ({ className }) => (
@@ -148,43 +142,71 @@
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
         );
-        
         const UserCircle = ({ className }) => (
             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
         );
-        
+        const TrashIcon = ({ className }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+        );
         const Spinner = ({ className }) => (
             <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
         );
+        const Crown = ({ className }) => (
+             <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+        );
         // --- End Icon Components ---
 
-        // 静态信息 (移到外部)
-        const recyclingInfo = {
-            recyclable: [
-                { name: 'Paper', items: ['Newspapers', 'Magazines', 'Cardboard boxes', 'Office paper', 'Paper bags'] },
-                { name: 'Glass', items: ['Bottles', 'Jars', 'Glass containers'] },
-                { name: 'Plastic', items: ['PET bottles (#1)', 'HDPE containers (#2)', 'Plastic bags (check local rules)'] },
-                { name: 'Metal', items: ['Aluminum cans', 'Steel cans', 'Tin cans', 'Metal lids'] }
-            ],
-            nonRecyclable: [
-                { name: 'Contaminated Items', items: ['Pizza boxes with grease', 'Food-soiled paper', 'Napkins and tissues'] },
-                { name: 'Mixed Materials', items: ['Chip bags', 'Candy wrappers', 'Coffee cups with plastic lining'] },
-                { name: 'Other', items: ['Styrofoam', 'Broken glass', 'Ceramic items', 'Light bulbs'] }
-            ]
-        };
-        
-        // --- 页面组件 (移到外部) ---
+        const recyclingInfo = [
+            {
+                colorName: 'Blue',
+                colorClass: 'bg-blue-500',
+                title: 'Paper',
+                description: 'Newspapers, magazines, cardboard boxes, office paper, etc.',
+                tip: 'Paper should be kept dry and flattened.'
+            },
+            {
+                colorName: 'Brown',
+                colorClass: 'bg-[#8B4513]', 
+                title: 'Glass',
+                description: 'Glass bottles, glass containers, etc.',
+                tip: 'Rinse clean and handle with care.'
+            },
+            {
+                colorName: 'Orange',
+                colorClass: 'bg-orange-500',
+                title: 'Plastic & Others',
+                description: 'Plastic bottles, plastic containers, cans, metal, aluminum products, etc.',
+                tip: 'Plastics and metals need to be washed and flattened.'
+            },
+            {
+                colorName: 'Black / Dark Green',
+                colorClass: 'bg-gray-800', 
+                title: 'General Waste',
+                description: 'Kitchen waste, contaminated tissues, diapers, dust, and other non-recyclable waste.',
+                tip: 'This is the main daily waste.'
+            },
+            {
+                colorName: 'Red',
+                colorClass: 'bg-red-600',
+                title: 'Hazardous Waste',
+                description: 'Used batteries, light bulbs/tubes, expired medicines, etc.',
+                tip: 'Store separately and safely; send to designated collection points.'
+            }
+        ];
         
         const LoadingPage = () => (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center">
                 <div className="text-center">
                     <Spinner className="h-10 w-10 text-green-600 mx-auto mb-4" />
-                    {/* *** 修改：移除了 (v1.1) *** */}
                     <p className="text-lg text-gray-700">Loading...</p>
                 </div>
             </div>
@@ -342,15 +364,28 @@
                         <div
                             className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mb-4 relative"
                         >
-                            <UserCircle className="w-20 h-20 text-green-600" />
+                            {userProfile?.isPremium ? (
+                                <div className="relative">
+                                    <div className="absolute -top-2 -right-2 bg-yellow-400 rounded-full p-1">
+                                        <Crown className="w-6 h-6 text-white" />
+                                    </div>
+                                    <UserCircle className="w-20 h-20 text-yellow-600" />
+                                </div>
+                            ) : (
+                                <UserCircle className="w-20 h-20 text-green-600" />
+                            )}
                         </div>
                         
                         <p className="text-lg font-medium text-gray-700 break-all">
                             {user?.email}
                         </p>
-                        <p className="text-sm text-gray-500 mb-6">
+                        <p className="text-sm text-gray-500 mb-2">
                             Username: {userProfile?.username ? userProfile.username : (user?.email ? user.email.split('@')[0] : '...')}
                         </p>
+                        
+                        <div className={`px-4 py-1 rounded-full text-sm font-bold mb-6 ${userProfile?.isPremium ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {userProfile?.isPremium ? '👑 Premium Member' : 'Standard Member'}
+                        </div>
 
                         <button
                             onClick={handleLogout}
@@ -368,9 +403,11 @@
             setMenuOpen, menuOpen, handleLogout, setCurrentPage, setProfileOpen,
             leaderboard, uploadInputRef, cameraInputRef, handleImageUpload,
             scannedImage, scanResult,
-            // *** 新增 Props ***
             handleAddScore,
-            scoreAdded
+            scoreAdded,
+            userProfile,
+            user,
+            currentUserEntry 
         }) => (
             <div className="min-h-screen bg-gray-50">
                 <header className="bg-green-600 text-white p-4 shadow-lg">
@@ -429,29 +466,92 @@
                             <h2 className="text-2xl font-bold text-gray-800">Leaderboard</h2>
                         </div>
                         <div className="space-y-3">
-                            {leaderboard.length > 0 ? leaderboard.map((user, index) => (
-                                <div key={user.id || index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white ${
-                                            index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-600' : 'bg-green-600'
-                                        }`}>
-                                            {index + 1}
-                                        </div>
-                                        <div>
-                                            <p className="font-semibold text-gray-800">{user.name ? user.name : '...'}</p>
-                                            <p className="text-sm text-gray-500">{user.items} items recycled</p>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-2xl font-bold text-green-600">{user.score}</p>
-                                        <p className="text-xs text-gray-500">points</p>
-                                    </div>
-                                </div>
-                            )) : (
+                            {leaderboard.length > 0 ? (
+                                <>
+                                    {leaderboard.map((entry, index) => {
+                                        const isCurrentUser = user && entry.id === user.uid;
+                                        return (
+                                            <div key={entry.id || index} className={`flex items-center justify-between p-4 rounded-lg transition-all ${
+                                                isCurrentUser 
+                                                ? 'bg-green-50 border-2 border-green-500 shadow-md transform scale-[1.02] z-10' 
+                                                : 'bg-white border border-gray-100 hover:bg-gray-50 hover:shadow-sm'
+                                            }`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-sm ${
+                                                        index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-orange-500' : 'bg-green-600'
+                                                    }`}>
+                                                        {index + 1}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-gray-800">{entry.name}</p>
+                                                            {isCurrentUser && (
+                                                                <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-200 font-medium">
+                                                                    You
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-sm text-gray-500">{entry.items} items recycled</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-2xl font-bold text-green-600">{entry.score}</p>
+                                                    <p className="text-xs text-gray-500">points</p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    
+                                    {currentUserEntry && currentUserEntry.rank > 5 && (
+                                        <>
+                                            <div className="flex items-center justify-center py-2 opacity-50">
+                                                <div className="w-1 h-1 bg-gray-400 rounded-full mx-1"></div>
+                                                <div className="w-1 h-1 bg-gray-400 rounded-full mx-1"></div>
+                                                <div className="w-1 h-1 bg-gray-400 rounded-full mx-1"></div>
+                                            </div>
+                                            <div className="flex items-center justify-between p-4 bg-green-50 border-2 border-green-500 rounded-lg shadow-md transform scale-[1.02] transition-all z-10">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white bg-green-600 shadow-sm">
+                                                        {currentUserEntry.rank}
+                                                    </div>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-gray-800">{currentUserEntry.name}</p>
+                                                            <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full border border-green-200 font-medium">
+                                                                You
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-gray-500">{currentUserEntry.items} items recycled</p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-2xl font-bold text-green-600">{currentUserEntry.score}</p>
+                                                    <p className="text-xs text-gray-500">points</p>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </>
+                            ) : (
                                 <p className="text-gray-500 text-center py-4">Loading leaderboard or no data...</p>
                             )}
                         </div>
                     </div>
+                    
+                    {/* *** 扫描次数显示 *** */}
+                    <div className="mb-4 flex justify-between items-center px-2">
+                        <span className="font-semibold text-gray-700">Daily Usage:</span>
+                        {userProfile?.isPremium ? (
+                            <span className="flex items-center gap-1 text-yellow-600 font-bold">
+                                <Crown className="w-5 h-5" /> Premium (Unlimited)
+                            </span>
+                        ) : (
+                            <span className={`font-bold ${userProfile?.dailyScanCount >= 5 ? 'text-red-600' : 'text-green-600'}`}>
+                                {userProfile?.dailyScanCount || 0}/5 Scans
+                            </span>
+                        )}
+                    </div>
+
                     {/* ... (扫描按钮) ... */}
                     <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg p-8 text-center">
                         <h3 className="text-2xl font-bold text-white mb-4">Scan Your Item</h3>
@@ -489,13 +589,12 @@
                         />
                     </div>
                     
-                    {/* *** 修改：扫描结果区域 *** */}
                     {scannedImage && (
                         <div className="mt-6 bg-white rounded-xl shadow-lg p-6">
                             <h3 className="text-xl font-bold mb-4">Scan Result</h3>
                             <img src={scannedImage} alt="Scanned" className="w-full max-h-64 object-contain rounded-lg mb-4" />
                             {scanResult ? (
-                                <> {/* *** 修改：添加 Fragment *** */}
+                                <> 
                                     <div className={`p-4 rounded-lg ${scanResult.recyclable ? 'bg-green-50 border-2 border-green-500' : 'bg-red-50 border-2 border-red-500'}`}>
                                         <p className="text-lg font-bold mb-2">{scanResult.type}</p>
                                         <p className="text-sm mb-1">Category: {scanResult.category}</p>
@@ -522,7 +621,6 @@
                                         </p>
                                     </div>
                                     
-                                    {/* *** 新增：Recycle 按钮 *** */}
                                     <button
                                         onClick={handleAddScore}
                                         disabled={!scanResult.recyclable || scoreAdded}
@@ -598,43 +696,41 @@
                         </button>
                     </div>
                 )}
-                {/* ... (信息页面内容保持不变) ... */}
+                
                 <div className="p-6 max-w-4xl mx-auto">
-                    <div className="mb-8">
-                        <h2 className="text-3xl font-bold text-green-600 mb-2">♻️ Recyclable Items</h2>
-                        <p className="text-gray-600">These items can be recycled in most areas</p>
+                    <div className="mb-8 text-center">
+                        <h2 className="text-3xl font-bold text-gray-800 mb-2">Recycling Guidelines</h2>
+                        <p className="text-gray-600">Match items to the correct <strong>recycling bin color</strong>:</p>
                     </div>
-                    <div className="space-y-4 mb-12">
-                        {recyclingInfo.recyclable.map((category, index) => (
-                            <div key={index} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-                                <h3 className="text-xl font-bold text-gray-800 mb-3">{category.name}</h3>
-                                <ul className="space-y-2">
-                                    {category.items.map((item, idx) => (
-                                        <li key={idx} className="flex items-center gap-2 text-gray-700">
-                                            <span className="text-green-500">✓</span>
-                                            {item}
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mb-8">
-                        <h2 className="text-3xl font-bold text-red-600 mb-2">❌ Non-Recyclable Items</h2>
-                        <p className="text-gray-600">These items should go in regular trash</p>
-                    </div>
-                    <div className="space-y-4">
-                        {recyclingInfo.nonRecyclable.map((category, index) => (
-                            <div key={index} className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
-                                <h3 className="text-xl font-bold text-gray-800 mb-3">{category.name}</h3>
-                                <ul className="space-y-2">
-                                    {category.items.map((item, idx) => (
-                                        <li key={idx} className="flex items-center gap-2 text-gray-700">
-                                            <span className="text-red-500">✗</span>
-                                            {item}
-                                        </li>
-                                    ))}
-                                </ul>
+
+                    <div className="grid gap-6">
+                        {recyclingInfo.map((item, index) => (
+                            <div key={index} className="bg-white rounded-xl shadow-md overflow-hidden flex flex-col md:flex-row">
+                                <div className={`w-full md:w-32 ${item.colorClass} p-4 flex items-center justify-center`}>
+                                    <span className="text-white font-bold text-lg md:text-xl text-center">{item.title}</span>
+                                </div>
+                                
+                                <div className="p-6 flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className={`w-3 h-3 rounded-full ${item.colorClass}`}></span>
+                                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                            {item.colorName} Bin
+                                            <TrashIcon className="w-5 h-5 text-gray-500" />
+                                        </h3>
+                                    </div>
+                                    
+                                    <div className="mb-4">
+                                        <h4 className="font-semibold text-gray-700 mb-1">Description:</h4>
+                                        <p className="text-gray-600">{item.description}</p>
+                                    </div>
+                                    
+                                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                        <h4 className="font-semibold text-gray-700 mb-1 flex items-center gap-2">
+                                            💡 Tip:
+                                        </h4>
+                                        <p className="text-sm text-gray-600 italic">{item.tip}</p>
+                                    </div>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -693,7 +789,6 @@
                         </button>
                     </div>
                 )}
-                {/* ... (反馈页面内容保持不变) ... */}
                 <div className="p-6 max-w-2xl mx-auto">
                     <div className="bg-white rounded-xl shadow-lg p-8">
                         <div className="flex items-center gap-3 mb-6">
@@ -753,7 +848,7 @@
             const [user, setUser] = useState(null); 
             const [userProfile, setUserProfile] = useState(null); 
             const [firebaseReady, setFirebaseReady] = useState(false); 
-            const [isAuthLoading, setIsAuthLoading] = useState(true); // 全局加载 (只在启动时)
+            const [isAuthLoading, setIsAuthLoading] = useState(true); 
             
             const [isAuthActionLoading, setIsAuthActionLoading] = useState(false); 
             
@@ -773,8 +868,9 @@
             
             const isSigningUp = useRef(false);
             
-            // *** 新增：计分状态 ***
             const [scoreAdded, setScoreAdded] = useState(false);
+
+            const [currentUserEntry, setCurrentUserEntry] = useState(null);
 
             // --- Firebase 效果钩子 ---
 
@@ -813,7 +909,7 @@
                 };
             }, []); 
 
-            // 2. 监听认证状态 (依赖 firebaseReady)
+            // 2. 监听认证状态
             useEffect(() => {
                 if (!firebaseReady) return; 
 
@@ -831,34 +927,41 @@
                             const userDocRef = window.firebase.doc(window.firebase.db, 'users', authUser.uid);
                             const userDocSnap = await window.firebase.getDoc(userDocRef);
                             
+                            // *** 自动重置逻辑 ***
+                            const todayStr = new Date().toDateString();
+                            
                             if (userDocSnap.exists()) {
-                                console.log("User doc found.");
-                                setUserProfile(userDocSnap.data());
+                                let data = userDocSnap.data();
+                                
+                                // 检查是否需要重置每日次数
+                                if (data.lastScanDate !== todayStr) {
+                                    console.log("New day detected, resetting scan count.");
+                                    await window.firebase.updateDoc(userDocRef, {
+                                        dailyScanCount: 0,
+                                        lastScanDate: todayStr
+                                    });
+                                    data.dailyScanCount = 0;
+                                    data.lastScanDate = todayStr;
+                                }
+                                
+                                setUserProfile(data);
                             } else {
-                                console.warn("User doc not found! This might be due to Firestore rules.");
-                                setUserProfile(null); 
+                                console.warn("User doc not found! Creating one...");
+                                const newProfile = {
+                                    uid: authUser.uid,
+                                    email: authUser.email,
+                                    username: authUser.email.split('@')[0], 
+                                    score: 0,
+                                    items: 0,
+                                    joinedAt: new Date(),
+                                    dailyScanCount: 0,
+                                    lastScanDate: todayStr,
+                                    isPremium: false
+                                };
+                                await window.firebase.setDoc(userDocRef, newProfile);
+                                setUserProfile(newProfile); 
                             }
                             
-                            const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
-                            const q = window.firebase.query(usersCollectionRef);
-                            leaderboardListener.current = window.firebase.onSnapshot(q, (snapshot) => {
-                                const usersData = snapshot.docs.map(doc => ({
-                                    id: doc.id,
-                                    ...doc.data()
-                                }));
-                                usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
-                                
-                                const formattedLeaderboard = usersData.map(user => ({
-                                    name: user.username ? user.username : (user.email ? user.email.split('@')[0] : '...'), 
-                                    score: user.score || 0,
-                                    items: user.items || 0,
-                                    id: user.id
-                                }));
-                                setLeaderboard(formattedLeaderboard.slice(0, 5));
-                            }, (error) => {
-                                console.error("Error listening to leaderboard:", error);
-                            });
-
                             if (!isSigningUp.current) {
                                 setCurrentPage('home'); 
                             }
@@ -867,6 +970,7 @@
                             setUser(null);
                             setUserProfile(null);
                             setLeaderboard([]); 
+                            setCurrentUserEntry(null); 
                         }
                     } catch (error) {
                         console.error("Error during auth state change processing:", error);
@@ -885,6 +989,60 @@
                     }
                 };
             }, [firebaseReady]); 
+
+            // 3. 监听排行榜数据 (独立 Effect, 依赖 firebaseReady 和 user)
+            useEffect(() => {
+                if (!firebaseReady) return;
+
+                const usersCollectionRef = window.firebase.collection(window.firebase.db, "users");
+                const q = window.firebase.query(usersCollectionRef);
+
+                leaderboardListener.current = window.firebase.onSnapshot(q, (snapshot) => {
+                    const usersData = snapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data()
+                    }));
+                    usersData.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+                    // Top 5
+                    const formattedLeaderboard = usersData.slice(0, 5).map(u => ({
+                        name: u.username ? u.username : (u.email ? u.email.split('@')[0] : '...'),
+                        score: u.score || 0,
+                        items: u.items || 0,
+                        id: u.id
+                    }));
+                    setLeaderboard(formattedLeaderboard);
+
+                    // 计算当前用户排名
+                    if (user) {
+                         const myIndex = usersData.findIndex(u => u.id === user.uid);
+                         if (myIndex !== -1) {
+                             const u = usersData[myIndex];
+                             setCurrentUserEntry({
+                                name: u.username ? u.username : (u.email ? u.email.split('@')[0] : '...'),
+                                score: u.score || 0,
+                                items: u.items || 0,
+                                id: u.id,
+                                rank: myIndex + 1
+                             });
+                         } else {
+                             setCurrentUserEntry(null);
+                         }
+                    } else {
+                        setCurrentUserEntry(null);
+                    }
+                }, (error) => {
+                    console.error("Error listening to leaderboard:", error);
+                });
+
+                return () => {
+                     if (leaderboardListener.current) {
+                        // 注意：如果 onAuthStateChanged 里已经清理了，这里可能会多余，但为了安全起见可以保留
+                        // 实际上 onSnapshot 返回 unsubscribe 函数，我们应该保存它
+                        // 在这里我们直接让 onSnapshot 的返回值覆盖 ref
+                     }
+                };
+            }, [firebaseReady, user]); // 添加 user 依赖，以便在登录状态变化时重新计算排名
 
             // --- 认证处理函数 ---
             const handleAuthAction = async (e) => {
@@ -917,6 +1075,7 @@
                     }
                     
                     isSigningUp.current = true;
+                    const todayStr = new Date().toDateString();
                     
                     try {
                         console.log("Attempting sign up for:", email);
@@ -930,7 +1089,10 @@
                             username: username, 
                             score: 0,
                             items: 0,
-                            joinedAt: new Date()
+                            joinedAt: new Date(),
+                            dailyScanCount: 0,
+                            lastScanDate: todayStr,
+                            isPremium: false
                         });
                         console.log("User doc created.");
 
@@ -994,12 +1156,10 @@
 
             // --- 图像处理函数 ---
             
-            // *** 新增：手动添加分数函数 ***
             const handleAddScore = async () => {
                 const currentUser = window.firebase.auth.currentUser;
                 if (!firebaseReady || !currentUser || scoreAdded) return;
 
-                // 立即设置，防止重复点击
                 setScoreAdded(true);
                 
                 try {
@@ -1011,14 +1171,19 @@
                     console.log("Score updated for:", currentUser.uid);
                 } catch (updateError) {
                     console.error("Failed to update score:", updateError);
-                    setScoreAdded(false); // 如果失败，允许重试
+                    setScoreAdded(false); 
                 }
             };
             
             const handleImageUpload = (e) => {
                 const file = e.target.files[0];
                 if (file) {
-                    // *** 新增：重置计分状态 ***
+                    if (!userProfile?.isPremium && (userProfile?.dailyScanCount || 0) >= 5) {
+                        alert("Daily scan limit (5) reached! Please come back tomorrow or upgrade to Premium.");
+                        e.target.value = ''; 
+                        return;
+                    }
+
                     setScoreAdded(false);
                     
                     const reader = new FileReader();
@@ -1080,7 +1245,21 @@
                         const result = JSON.parse(jsonMatch[0]);
                         setScanResult(result);
                         
-                        // *** 移除自动计分逻辑 ***
+                        const currentUser = window.firebase.auth.currentUser;
+                        if (currentUser && firebaseReady) {
+                            try {
+                                const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid);
+                                await window.firebase.updateDoc(userDocRef, {
+                                    dailyScanCount: window.firebase.increment(1)
+                                });
+                                setUserProfile(prev => ({
+                                    ...prev,
+                                    dailyScanCount: (prev.dailyScanCount || 0) + 1
+                                }));
+                            } catch (err) {
+                                console.error("Failed to update scan count", err);
+                            }
+                        }
                         
                     } else {
                         throw new Error('Invalid response format from Gemini');
@@ -1099,8 +1278,21 @@
                         setScanResult(mockResult);
                         alert(`API Error: ${error.message}\n\nUsing demo data. Please check Console (F12) for details.`);
                         
-                        // *** 移除自动计分逻辑 ***
-                        
+                         const currentUser = window.firebase.auth.currentUser;
+                        if (currentUser && firebaseReady) {
+                            const userDocRef = window.firebase.doc(window.firebase.db, "users", currentUser.uid);
+                            try {
+                                await window.firebase.updateDoc(userDocRef, {
+                                    dailyScanCount: window.firebase.increment(1)
+                                });
+                                setUserProfile(prev => ({
+                                    ...prev,
+                                    dailyScanCount: (prev.dailyScanCount || 0) + 1
+                                }));
+                            } catch (err) {
+                                console.error("Demo update failed", err)
+                            }
+                        }
                     }, 1000);
                 }
             };
@@ -1115,17 +1307,14 @@
                 }
             };
 
-            // --- 页面路由逻辑 ---
-            
             if (criticalError) {
                 return <CriticalErrorPage message={criticalError} />;
             }
             
-            if (isAuthLoading) { // (只在启动时)
+            if (isAuthLoading) { 
                 return <LoadingPage />;
             }
             
-            // 根据 currentPage 渲染
             return (
                 <>
                     {currentPage === 'welcome' && <WelcomePage setCurrentPage={setCurrentPage} />}
@@ -1159,9 +1348,11 @@
                             handleImageUpload={handleImageUpload}
                             scannedImage={scannedImage}
                             scanResult={scanResult}
-                            // *** 传递新 Props ***
                             handleAddScore={handleAddScore}
                             scoreAdded={scoreAdded}
+                            userProfile={userProfile} 
+                            user={user} 
+                            currentUserEntry={currentUserEntry} 
                         />}
                     
                     {currentPage === 'information' && user && 
