@@ -4,15 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recycling Scanner</title>
-    <!-- React 库 -->
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-    <!-- Babel 用于解析 JSX -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Firebase v10.12.4 -->
     <script type="module">
       import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
       import { 
@@ -108,9 +104,9 @@
         const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
         // *** 管理员/特权邮箱白名单 (超级管理员) ***
+        // *** 修改：只保留 kahxuan1125@gmail.com ***
         const ADMIN_EMAILS = [
-            'kahxuan1125@gmail.com', 
-            'kahxuan@gmail.com'
+            'kahxuan1125@gmail.com'
         ];
 
         // --- Icon components ---
@@ -258,7 +254,7 @@
             </div>
         );
 
-        // *** Chat Widget Component with Limit ***
+        // *** Chat Widget Component with NO Limit ***
         const ChatWidget = ({ userProfile, onMessageSent }) => {
             const [isOpen, setIsOpen] = useState(false);
             const [messages, setMessages] = useState([
@@ -269,9 +265,7 @@
             const messagesEndRef = useRef(null);
 
             const isPremium = userProfile?.isPremium || userProfile?.isAdminPremium;
-            const chatLimit = 20;
-            const currentCount = userProfile?.dailyChatCount || 0;
-            const remaining = Math.max(0, chatLimit - currentCount);
+            // *** 移除了 Limit 相关变量 ***
 
             const scrollToBottom = () => {
                 messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -284,15 +278,7 @@
             const handleSend = async () => {
                 if (!input.trim() || isLoading) return;
 
-                // *** Limit Check ***
-                if (!isPremium && currentCount >= chatLimit) {
-                    setMessages(prev => [...prev, { 
-                        role: 'model', 
-                        text: "⚠️ Daily limit reached (20/20). Upgrade to Premium for unlimited chat!" 
-                    }]);
-                    setInput('');
-                    return;
-                }
+                // *** 移除了 Limit 检查逻辑，所有用户都可以无限制发送 ***
 
                 const userText = input.trim();
                 setMessages(prev => [...prev, { role: 'user', text: userText }]);
@@ -325,7 +311,7 @@
 
                     setMessages(prev => [...prev, { role: 'model', text: aiResponse }]);
                     
-                    // *** Update Count on Success ***
+                    // *** Update Count (Optional, just for stats) ***
                     if (onMessageSent) {
                         onMessageSent();
                     }
@@ -352,11 +338,7 @@
                                         </div>
                                         <span className="font-bold">Recycling Assistant</span>
                                     </div>
-                                    {!isPremium && (
-                                        <span className="text-xs text-white/80 mt-1 ml-1">
-                                            Daily Limit: {currentCount}/{chatLimit}
-                                        </span>
-                                    )}
+                                    {/* *** 移除了 Limit 显示 *** */}
                                     {isPremium && (
                                         <span className="text-xs text-yellow-200 font-bold mt-1 ml-1 flex items-center gap-1">
                                             <Crown className="w-3 h-3" /> Premium User
@@ -404,13 +386,12 @@
                                         value={input}
                                         onChange={(e) => setInput(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                                        placeholder={(!isPremium && currentCount >= chatLimit) ? "Limit reached" : "Ask a question..."}
-                                        disabled={!isPremium && currentCount >= chatLimit}
+                                        placeholder="Ask a question..."
                                         className="flex-1 px-4 py-2 bg-gray-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-green-500 transition disabled:bg-gray-200 disabled:text-gray-500"
                                     />
                                     <button 
                                         onClick={handleSend}
-                                        disabled={!input.trim() || isLoading || (!isPremium && currentCount >= chatLimit)}
+                                        disabled={!input.trim() || isLoading}
                                         className="p-2 bg-green-600 text-white rounded-full hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition shadow-md flex-shrink-0"
                                     >
                                         <svg className="w-5 h-5 translate-x-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
@@ -491,7 +472,8 @@
                                     />
                                 </div>
                                 <p className="text-center text-gray-600 mb-6">
-                                    Please pay <strong>{selectedPlan === 'monthly' ? 'RM 10' : 'RM 100'}</strong> via DuitNow / TNG.
+                                    {/* *** 修改：价格显示 RM 2.99 / RM 29.99 *** */}
+                                    Please pay <strong>{selectedPlan === 'monthly' ? 'RM 2.99' : 'RM 29.99'}</strong> via DuitNow / TNG.
                                     <br/>
                                     {user && <span className="text-xs text-gray-400 block mt-1">Ref: {user.email}</span>}
                                 </p>
@@ -554,7 +536,8 @@
                     <div className="p-6 max-w-4xl mx-auto">
                         <div className="text-center mb-8">
                             <h2 className="text-3xl font-bold text-gray-800 mb-2">Upgrade to Premium</h2>
-                            <p className="text-gray-600">Unlock unlimited scans and AI chat!</p>
+                            {/* *** 修改：去掉了 "unlimited AI chat" 描述 *** */}
+                            <p className="text-gray-600">Unlock unlimited scans!</p>
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
@@ -578,7 +561,8 @@
                                     )}
                                 </div>
                                 <div className="mb-6">
-                                    <span className="text-4xl font-bold text-green-600">RM 10</span>
+                                    {/* *** 修改：价格改为 RM 2.99 *** */}
+                                    <span className="text-4xl font-bold text-green-600">RM 2.99</span>
                                     <span className="text-gray-500"> / month</span>
                                 </div>
                                 <ul className="space-y-3 mb-6">
@@ -586,10 +570,7 @@
                                         <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                         Unlimited Scans
                                     </li>
-                                    <li className="flex items-center gap-2 text-gray-600">
-                                        <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                                        Unlimited AI Chat
-                                    </li>
+                                    {/* *** 删除了 Unlimited AI Chat *** */}
                                     <li className="flex items-center gap-2 text-gray-600">
                                         <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                         Cancel Anytime
@@ -620,10 +601,12 @@
                                     )}
                                 </div>
                                 <div className="mb-2">
-                                    <span className="text-4xl font-bold text-green-600">RM 100</span>
+                                    {/* *** 修改：价格改为 RM 29.99 *** */}
+                                    <span className="text-4xl font-bold text-green-600">RM 29.99</span>
                                     <span className="text-gray-500"> / year</span>
                                 </div>
-                                <p className="text-sm text-green-600 font-semibold mb-6">Save RM 20 per year!</p>
+                                {/* *** 修改：节省提示 (35.88 - 29.99 = 5.89) *** */}
+                                <p className="text-sm text-green-600 font-semibold mb-6">Save RM 5.89 per year!</p>
                                 <ul className="space-y-3 mb-6">
                                     <li className="flex items-center gap-2 text-gray-600">
                                         <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -2251,4 +2234,3 @@
     </script>
 </body>
 </html>
-
